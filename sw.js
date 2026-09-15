@@ -1,4 +1,4 @@
-const CACHE = "piloto-cto-final-v2";
+const CACHE = "piloto-cto-final-v3";
 
 const SHELL = [
   "./",
