@@ -945,7 +945,7 @@ $("estado").className="estado";
 
 $("tabla").innerHTML=
 '<tr><td colspan="15" class="vacia">Todavía no se han realizado búsquedas.</td></tr>';
-});
+$("recepcionCompartir").hidden = true;
 if("serviceWorker" in navigator){
   window.addEventListener("load",()=>{
     navigator.serviceWorker.register("./sw.js").catch(e=>console.warn("Service Worker:",e));
