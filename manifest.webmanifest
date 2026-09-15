@@ -1,6 +1,7 @@
 {
   "name": "Piloto CTO",
-  "short_name": "Piloto CTO",
+"short_name": "Piloto CTO",
+"id": "./",
   "description": "Extracción de PDF, KML y KMZ con recepción automática desde Compartir en Android.",
   "start_url": "./?source=pwa",
   "scope": "./",
