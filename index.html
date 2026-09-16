@@ -153,7 +153,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc=
 "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
 let registros=[];
-let elementosPDF=[];
+let elementosPDF=[]
 let textoOriginal="";
 let eliminados=0;
 let archivoCompartido=null;
@@ -946,9 +946,12 @@ $("estado").className="estado";
 $("tabla").innerHTML=
 '<tr><td colspan="15" class="vacia">Todavía no se han realizado búsquedas.</td></tr>';
 $("recepcionCompartir").hidden = true;
+});
+
 if("serviceWorker" in navigator){
   window.addEventListener("load",()=>{
-    navigator.serviceWorker.register("./sw.js").catch(e=>console.warn("Service Worker:",e));
+    navigator.serviceWorker.register("./sw.js")
+      .catch(e=>console.warn("Service Worker:",e));
   });
 }
 </script>
