@@ -1,4 +1,4 @@
-const CACHE_NAME = "piloto-cto-v1";
+const CACHE_NAME = "piloto-cto-v2";
 
 const ARCHIVOS_APP = [
   "./",
@@ -28,28 +28,34 @@ self.addEventListener("activate", event => {
 
 self.addEventListener("fetch", event => {
   const request = event.request;
+  const url = new URL(request.url);
 
-  // Recepción de archivos desde Android/WhatsApp
+  // RECEPCIÓN DESDE WHATSAPP / COMPARTIR
   if (
     request.method === "POST" &&
-    new URL(request.url).searchParams.get("shared") === "1"
+    url.searchParams.get("shared") === "1"
   ) {
     event.respondWith(recibirArchivoCompartido(request));
     return;
   }
 
-  // Funcionamiento normal de la aplicación
+  // FUNCIONAMIENTO NORMAL
   if (request.method === "GET") {
     event.respondWith(
       caches.match(request).then(cached => {
         return cached || fetch(request);
       })
-    );async function recibirArchivoCompartido(request) {
+    );
+  }
+});
+
+async function recibirArchivoCompartido(request) {
   try {
     const formData = await request.formData();
 
     let archivo = formData.get("file");
 
+    // Si Android utiliza otro nombre, buscamos cualquier archivo.
     if (!archivo || typeof archivo.arrayBuffer !== "function") {
       for (const valor of formData.values()) {
         if (valor && typeof valor.arrayBuffer === "function") {
@@ -60,7 +66,10 @@ self.addEventListener("fetch", event => {
     }
 
     if (!archivo || typeof archivo.arrayBuffer !== "function") {
-      return Response.redirect("./?shared=1&error=no-file", 303);
+      return Response.redirect(
+        "./?shared=1&error=no-file",
+        303
+      );
     }
 
     const buffer = await archivo.arrayBuffer();
@@ -87,10 +96,16 @@ self.addEventListener("fetch", event => {
 
     db.close();
 
-    return Response.redirect("./?shared=1", 303);
+    return Response.redirect(
+      "./?shared=1",
+      303
+    );
 
   } catch (error) {
-    console.error("Error recibiendo archivo compartido:", error);
+    console.error(
+      "Error recibiendo archivo compartido:",
+      error
+    );
 
     return Response.redirect(
       "./?shared=1&error=processing",
@@ -98,13 +113,13 @@ self.addEventListener("fetch", event => {
     );
   }
 }
-  }
-});
-
 
 function abrirBaseDatos() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open("piloto-cto-share", 1);
+    const request = indexedDB.open(
+      "piloto-cto-share",
+      1
+    );
 
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -114,7 +129,12 @@ function abrirBaseDatos() {
       }
     };
 
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      resolve(request.result);
+    };
+
+    request.onerror = () => {
+      reject(request.error);
+    };
   });
 }
