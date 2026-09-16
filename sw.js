@@ -28,7 +28,8 @@ self.addEventListener("activate", event => {
 
 self.addEventListener("fetch", event => {
   const request = event.request;
-  const url = new URL(request.url
+  const url = new 
+    URL(request.url);
 // RECEPCIÓN DESDE WHATSAPP / COMPARTIR
 if (
   request.method === "POST" &&
