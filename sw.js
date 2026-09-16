@@ -44,30 +44,22 @@ self.addEventListener("fetch", event => {
       caches.match(request).then(cached => {
         return cached || fetch(request);
       })
-    );
-  }
-});
-
-async function recibirArchivoCompartido(request) {
+    );async function recibirArchivoCompartido(request) {
   try {
     const formData = await request.formData();
 
     let archivo = formData.get("file");
 
-if (!archivo || typeof archivo.arrayBuffer !== "function") {
-  for (const valor of formData.values()) {
-    if (valor && typeof valor.arrayBuffer === "function") {
-      archivo = valor;
-      break;
-    }if (!archivo || typeof archivo.arrayBuffer !== "function") {
-  return Response.redirect("./?shared=1&error=no-file", 303);
-}
-  }
-}
+    if (!archivo || typeof archivo.arrayBuffer !== "function") {
+      for (const valor of formData.values()) {
+        if (valor && typeof valor.arrayBuffer === "function") {
+          archivo = valor;
+          break;
+        }
+      }
+    }
 
-    
-
-    if (!(archivo instanceof File)) {
+    if (!archivo || typeof archivo.arrayBuffer !== "function") {
       return Response.redirect("./?shared=1&error=no-file", 303);
     }
 
@@ -93,13 +85,22 @@ if (!archivo || typeof archivo.arrayBuffer !== "function") {
       transaction.onerror = () => reject(transaction.error);
     });
 
+    db.close();
+
     return Response.redirect("./?shared=1", 303);
 
   } catch (error) {
     console.error("Error recibiendo archivo compartido:", error);
-    return Response.redirect("./?shared=1&error=processing", 303);
+
+    return Response.redirect(
+      "./?shared=1&error=processing",
+      303
+    );
   }
 }
+  }
+});
+
 
 function abrirBaseDatos() {
   return new Promise((resolve, reject) => {
