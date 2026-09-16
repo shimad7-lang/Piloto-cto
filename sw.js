@@ -59,19 +59,13 @@ if (!archivo || typeof archivo.arrayBuffer !== "function") {
     if (valor && typeof valor.arrayBuffer === "function") {
       archivo = valor;
       break;
-    }
+    }if (!archivo || typeof archivo.arrayBuffer !== "function") {
+  return Response.redirect("./?shared=1&error=no-file", 303);
+}
   }
 }
 
-    // Algunos sistemas Android pueden enviar el archivo con otro nombre
     
-      for (const valor of formData.values()) {
-        if (valor instanceof File) {
-          archivo = valor;
-          break;
-        }
-      }
-    }
 
     if (!(archivo instanceof File)) {
       return Response.redirect("./?shared=1&error=no-file", 303);
