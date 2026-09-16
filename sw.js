@@ -1,4 +1,4 @@
-const CACHE_NAME = "piloto-cto-v2";
+const CACHE_NAME = "piloto-cto-v3";
 
 const ARCHIVOS_APP = [
   "./",
