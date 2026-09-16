@@ -54,8 +54,17 @@ async function recibirArchivoCompartido(request) {
 
     let archivo = formData.get("file");
 
+if (!archivo || typeof archivo.arrayBuffer !== "function") {
+  for (const valor of formData.values()) {
+    if (valor && typeof valor.arrayBuffer === "function") {
+      archivo = valor;
+      break;
+    }
+  }
+}
+
     // Algunos sistemas Android pueden enviar el archivo con otro nombre
-    if (!(archivo instanceof File)) {
+    
       for (const valor of formData.values()) {
         if (valor instanceof File) {
           archivo = valor;
