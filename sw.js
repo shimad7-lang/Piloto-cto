@@ -32,9 +32,10 @@ self.addEventListener("fetch", event => {
 
   // RECEPCIÓN DESDE WHATSAPP / COMPARTIR
   if (
-    request.method === "POST" &&
-    url.searchParams.get("shared") === "1"
-  ) {
+    if (
+  request.method === "POST" &&
+  url.pathname.endsWith("/share-target.html")
+) {
     event.respondWith(recibirArchivoCompartido(request));
     return;
   }
