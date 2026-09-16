@@ -28,18 +28,15 @@ self.addEventListener("activate", event => {
 
 self.addEventListener("fetch", event => {
   const request = event.request;
-  const url = new URL(request.url);
-
-  // RECEPCIÓN DESDE WHATSAPP / COMPARTIR
-  if (
-    if (
+  const url = new URL(request.url
+// RECEPCIÓN DESDE WHATSAPP / COMPARTIR
+if (
   request.method === "POST" &&
   url.pathname.endsWith("/share-target.html")
 ) {
-    event.respondWith(recibirArchivoCompartido(request));
-    return;
-  }
-
+  event.respondWith(recibirArchivoCompartido(request));
+  return;
+}
   // FUNCIONAMIENTO NORMAL
   if (request.method === "GET") {
     event.respondWith(
