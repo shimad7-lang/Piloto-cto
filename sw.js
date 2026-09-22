@@ -1,159 +1,81 @@
-const CACHE_NAME = "piloto-cto-v5";
+const CACHE="piloto-cto-paralelo-v2";
 
-const ARCHIVOS_APP = [
-"./",
-"./index.html",
-"./manifest.webmanifest"
-];
+self.addEventListener("install",()=>self.skipWaiting());
 
-self.addEventListener("install", event => {
-event.waitUntil(
-caches.open(CACHE_NAME)
-.then(cache => cache.addAll(ARCHIVOS_APP))
-.then(() => self.skipWaiting())
-);
-});
+self.addEventListener("activate",e=>e.waitUntil(self.clients.claim()));
 
-self.addEventListener("activate", event => {
-event.waitUntil(
-caches.keys().then(keys =>
-Promise.all(
-keys
-.filter(key => key !== CACHE_NAME)
-.map(key => caches.delete(key))
-)
-).then(() => self.clients.claim())
-);
-});
+self.addEventListener("fetch",event=>{
+  const url=new URL(event.request.url);
 
-self.addEventListener("fetch", event => {
-const request = event.request;
+  if(event.request.method!=="POST") return;
+  if(!url.pathname.endsWith("/share-target")) return;
 
-// Recepción de archivos desde Android / WhatsApp
-if (
-request.method === "POST" &&
-new URL(request.url).searchParams.get("shared") === "1"
-) {
-event.respondWith(recibirArchivoCompartido(request));
-return;
-}
+  event.respondWith((async()=>{
+    try{
+      const form=await event.request.formData();
+      const files=form.getAll("files").filter(x=>x instanceof File);
 
-// Funcionamiento normal de la aplicación
-if (request.method === "GET") {
-event.respondWith(
-caches.match(request).then(cached => {
-return cached || fetch(request);
-})
-);
-}
-});
+      const db=await openDB();
+      const tx=db.transaction("files","readwrite");
+      const store=tx.objectStore("files");
 
-async function recibirArchivoCompartido(request) {
-try {
-const formData = await request.formData();
+      for(const file of files){
+        store.add({
+          name:file.name,
+          type:file.type,
+          size:file.size,
+          blob:file
+        });
+      }
 
-let archivo = formData.get("file");
+      await txDone(tx);
 
-// Android puede enviar el archivo con otro nombre.
-if (!archivo || typeof archivo.arrayBuffer !== "function") {
-  for (const valor of formData.values()) {
-    if (valor && typeof valor.arrayBuffer === "function") {
-      archivo = valor;
-      break;
+      return Response.redirect(
+        new URL("./?shared=1",url),
+        303
+      );
+
+    }catch(err){
+
+      return Response.redirect(
+        new URL("./?shared=error",url),
+        303
+      );
+
     }
-  }
-}
-
-if (!archivo || typeof archivo.arrayBuffer !== "function") {
-  return Response.redirect(
-    "./?shared=1&error=no-file",
-    303
-  );
-}
-
-const buffer = await archivo.arrayBuffer();
-
-const db = await abrirBaseDatos();
-
-await new Promise((resolve, reject) => {
-  const transaction = db.transaction(
-    "files",
-    "readwrite"
-  );
-
-  transaction.objectStore("files").put(
-    {
-      name:
-        archivo.name ||
-        "archivo-compartido",
-
-      type:
-        archivo.type ||
-        "application/octet-stream",
-
-      data: buffer,
-
-      size:
-        archivo.size ||
-        buffer.byteLength,
-
-      receivedAt: Date.now()
-    },
-    "latest"
-  );
-
-  transaction.oncomplete = resolve;
-
-  transaction.onerror = () =>
-    reject(transaction.error);
+  })());
 });
 
-db.close();
+function openDB(){
+  return new Promise((resolve,reject)=>{
+    const r=indexedDB.open(
+      "piloto-cto-share-paralelo",
+      1
+    );
 
-return Response.redirect(
-  "./?shared=1",
-  303
-);
+    r.onupgradeneeded=()=>{
+      if(!r.result.objectStoreNames.contains("files")){
+        r.result.createObjectStore(
+          "files",
+          {
+            keyPath:"id",
+            autoIncrement:true
+          }
+        );
+      }
+    };
 
-} catch (error) {
-
-console.error(
-  "Error recibiendo archivo compartido:",
-  error
-);
-
-return Response.redirect(
-  "./?shared=1&error=processing",
-  303
-);
-
+    r.onsuccess=()=>resolve(r.result);
+    r.onerror=()=>reject(r.error);
+  });
 }
-}
 
-function abrirBaseDatos() {
-return new Promise((resolve, reject) => {
-
-const request = indexedDB.open(
-  "piloto-cto-share",
-  1
-);
-
-request.onupgradeneeded = () => {
-
-  const db = request.result;
-
-  if (
-    !db.objectStoreNames.contains("files")
-  ) {
-    db.createObjectStore("files");
-  }
-};
-
-request.onsuccess = () =>
-  resolve(request.result);
-
-request.onerror = () =>
-  reject(request.error);
-
-});
+function txDone(tx){
+  return new Promise((resolve,reject)=>{
+    tx.oncomplete=resolve;
+    tx.onerror=()=>reject(tx.error);
+    tx.onabort=()=>reject(
+      tx.error || new Error("transaction aborted")
+    );
+  });
 }
