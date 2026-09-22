@@ -1,959 +1,345 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#155eef">
-<meta name="description" content="Piloto CTO — recibe PDF, KML y KMZ desde WhatsApp y muestra automáticamente los resultados.">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<title>Piloto CTO</title>
+const CACHE="piloto-cto-paralelo-v2";
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+self.addEventListener("install",()=>self.skipWaiting());
 
-<style>
-:root{--azul:#155eef;--oscuro:#102a43;--fondo:#f4f6fa;--borde:#d8e0eb;--verde:#087f5b;--rojo:#c92a2a;--naranja:#b54708}
-*{box-sizing:border-box}
-body{margin:0;background:var(--fondo);color:#172b4d;font-family:Arial,Helvetica,sans-serif}
-.contenedor{max-width:1600px;margin:auto;padding:20px}
-header{background:linear-gradient(135deg,#102a43,#155eef);color:white;padding:25px;border-radius:14px;margin-bottom:18px}
-header h1{margin:0 0 8px}
-header p{margin:0;opacity:.9}
-.tarjeta{background:white;border:1px solid var(--borde);border-radius:12px;padding:18px;margin-bottom:18px;box-shadow:0 3px 10px #00000009}
-h2{margin-top:0;color:var(--oscuro)}
-.formulario{display:grid;grid-template-columns:1fr 1fr;gap:15px}
-.campo{display:flex;flex-direction:column;gap:7px}
-label{font-weight:bold}
-input{padding:11px;border:1px solid #b9c4d0;border-radius:7px;font-size:15px}
-.ayuda{color:#637083;font-size:12px}
-.botones{display:flex;flex-wrap:wrap;gap:10px;margin-top:17px}
-button{border:0;border-radius:7px;padding:10px 15px;font-weight:bold;cursor:pointer}
-button:disabled{opacity:.5;cursor:not-allowed}
-.btn-principal{background:var(--azul);color:white}
-.btn-secundario{background:#e8eef7;color:#172b4d}
-.btn-maps{display:inline-block;background:#eafaf4;color:var(--verde);padding:6px 9px;border-radius:5px;text-decoration:none;font-weight:bold;white-space:nowrap}
-.btn-copiar{background:#edf2ff;color:var(--azul);padding:6px 9px;font-size:12px}
-.estado{display:none;margin-top:15px;padding:12px;border-radius:7px}
-.estado:not(:empty){display:block;background:#eef4ff;color:#174ea6}
-.estado.ok{background:#eafaf4;color:var(--verde)}
-.estado.error{background:#fff0f0;color:var(--rojo)}
-.resumen{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}
-.indicador{min-width:135px;padding:11px 15px;border-radius:8px;background:#edf2ff}
-.indicador strong{display:block;color:var(--azul);font-size:21px}
-.tabla{overflow:auto}
-table{width:100%;border-collapse:collapse;font-size:12px}
-th{padding:9px 7px;color:white;background:var(--oscuro);text-align:left;white-space:nowrap}
-td{padding:8px 7px;border-bottom:1px solid #e1e6ed;vertical-align:top}
-tr:nth-child(even){background:#f8faff}
-.vacia{padding:25px;color:#68778d;text-align:center}
-.badge{display:inline-block;padding:4px 8px;border-radius:20px;font-size:11px;font-weight:bold}
-.completa{color:var(--verde);background:#e7f8f1}
-.parcial{color:var(--naranja);background:#fff4e5}
-.no{color:var(--rojo);background:#fff0f0}
-.evidencia{margin:3px 0;padding:5px 7px;border-left:3px solid var(--azul);background:#f8f9fb;font-size:11px;white-space:pre-wrap}
-.coordenadas{font-family:monospace;font-size:11px;white-space:nowrap}
-pre{max-height:320px;overflow:auto;padding:14px;border-radius:7px;color:#d0d5dd;background:#101828;font-size:11px;white-space:pre-wrap}
-.diagnostico{font-size:13px;color:#526175}
-@media(max-width:800px){.formulario{grid-template-columns:1fr}.contenedor{padding:10px}}
-</style>
-</head>
+self.addEventListener("activate",e=>e.waitUntil(self.clients.claim()));
 
-<body>
-<div class="contenedor">
+self.addEventListener("fetch",event=>{
+  const url=new URL(event.request.url);
 
-<header>
-<h1>Piloto CTO</h1>
-<p>PDF · KML · KMZ · coordenadas · Google Maps · deduplicación automática · WhatsApp · recepción automática</p>
-</header>
+  if(event.request.method!=="POST") return;
+  if(!url.pathname.endsWith("/share-target")) return;
 
-<section class="tarjeta" id="recepcionCompartir" hidden>
-<h2>📥 Archivo recibido</h2>
-<div id="archivoCompartido" class="estado ok"></div>
-<div id="estadoCompartido" class="ayuda">Extrayendo datos automáticamente…</div>
-</section>
+  event.respondWith((async()=>{
+    try{
+      const form=await event.request.formData();
+      const files=form.getAll("files").filter(x=>x instanceof File);
 
-<section class="tarjeta">
-<h2>1. Cargar archivo</h2>
+      const db=await openDB();
+      const tx=db.transaction("files","readwrite");
+      const store=tx.objectStore("files");
 
-<div class="campo">
-<label for="archivo">Archivo PDF, KML o KMZ</label>
-<input id="archivo" type="file"
-accept=".pdf,.kml,.kmz,application/pdf,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz">
-<span class="ayuda">Puedes dejar CTO y empalme vacíos para analizar todas las CTO.</span>
-</div>
+      for(const file of files){
+        store.add({
+          name:file.name,
+          type:file.type,
+          size:file.size,
+          blob:file
+        });
+      }
 
-<div class="formulario" style="margin-top:17px">
-<div class="campo">
-<label for="ctos">CTO</label>
-<input id="ctos" type="text" placeholder="Ejemplo: 44653, 4374">
-<span class="ayuda">Separa varias CTO con comas o espacios.</span>
-</div>
+      await txDone(tx);
 
-<div class="campo">
-<label for="empalme">Empalme</label>
-<input id="empalme" type="text" placeholder="Ejemplo: E4374 o 4374">
-<span class="ayuda">Opcional. También acepta C-2, C_E, C_EMP o números.</span>
-</div>
-</div>
+      return Response.redirect(
+        new URL("./?shared=1",url),
+        303
+      );
 
-<div class="botones">
-<button id="extraer" class="btn-principal">Extraer datos</button>
-<button id="limpiar" class="btn-secundario">Limpiar</button>
-<button id="csv" class="btn-secundario" disabled>Descargar CSV</button>
-</div>
+    }catch(err){
 
-<div id="estado" class="estado"></div>
-<div id="diagnostico" class="diagnostico"></div>
-</section>
+      return Response.redirect(
+        new URL("./?shared=error",url),
+        303
+      );
 
-<section class="tarjeta">
-<h2>2. Resultados</h2>
-<div id="resumen" class="resumen"></div>
+    }
+  })());
+});
 
-<div class="tabla">
-<table>
-<thead>
-<tr>
-<th>CTO</th>
-<th>Nombre CTO</th>
-<th>Empalme</th>
-<th>Divisor</th>
-<th>Patilla</th>
-<th>Fibra</th>
-<th>Cable</th>
-<th>Descripción cable</th>
-<th>Tipo</th>
-<th>Longitud</th>
-<th>Distancia</th>
-<th>Ubicación</th>
-<th>Maps</th>
-<th>Estado</th>
-<th>Evidencias</th>
-</tr>
-</thead>
-<tbody id="tabla">
-<tr><td colspan="15" class="vacia">Todavía no se han realizado búsquedas.</td></tr>
-</tbody>
-</table>
-</div>
-</section>
+function openDB(){
+  return new Promise((resolve,reject)=>{
+    const r=indexedDB.open(
+      "piloto-cto-share-paralelo",
+      1
+    );
 
-<section class="tarjeta">
-<details>
-<summary>Mostrar texto/XML procesado</summary>
-<pre id="texto">No hay datos cargados.</pre>
-</details>
-</section>
+    r.onupgradeneeded=()=>{
+      if(!r.result.objectStoreNames.contains("files")){
+        r.result.createObjectStore(
+          "files",
+          {
+            keyPath:"id",
+            autoIncrement:true
+          }
+        );
+      }
+    };
 
-</div>
+    r.onsuccess=()=>resolve(r.result);
+    r.onerror=()=>reject(r.error);
+  });
+}
 
-<script>
-pdfjsLib.GlobalWorkerOptions.workerSrc=
-"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+function txDone(tx){
+  return new Promise((resolve,reject)=>{
+    tx.oncomplete=resolve;
+    tx.onerror=()=>reject(tx.error);
+    tx.onabort=()=>reject(
+      tx.error || new Error("transaction aborted")
+    );
+  });
+}
+  return out;
+}
 
-let registros=[];
-let elementosPDF=[]
-let textoOriginal="";
-let eliminados=0;
-let archivoCompartido=null;
+function render(){
+  const body=$("rows");
 
-const $=id=>document.getElementById(id);
-
-function mostrarArchivoCompartido(archivo){
-  archivoCompartido=archivo||null;
-  const panel=$("recepcionCompartir");
-  if(!archivoCompartido){
-    panel.hidden=true;
-    if($("archivoCompartido")) $("archivoCompartido").textContent="";
+  if(!results.length){
+    body.innerHTML='<tr><td colspan="9">No se han encontrado resultados.</td></tr>';
+    $("csv").disabled=true;
     return;
   }
-  panel.hidden=false;
-  $("archivoCompartido").textContent =
-    "Recibido: "+archivoCompartido.name+" · "+Math.max(1,Math.round(archivoCompartido.size/1024))+" KB";
+
+  body.innerHTML=results.map(r=>`
+    <tr>
+      <td><b>${esc(r.cto)}</b></td>
+      <td>${esc(r.nombre)}</td>
+      <td>${esc(r.empalme)}</td>
+      <td>${esc(r.dv)}</td>
+      <td>${esc(r.patilla)}</td>
+      <td>${esc(r.fibra)}</td>
+      <td>${esc(r.tramos.join(" | "))}</td>
+      <td>${esc(r.referencias.join(" | "))}</td>
+      <td>${esc(r.evidencias.join(" | "))}</td>
+    </tr>
+  `).join("");
+
+  $("csv").disabled=false;
 }
 
-async function procesarArchivoCompartido(archivo){
-  if(!archivo) return;
+function filtrar(){
+  const ctos=lista($("cto").value);
+  const empInput=$("emp").value.trim().replace(/^E[-_\s]*/i,"");
+  const emp=empInput ? "E"+empInput : "";
+
+  if(!ctos.length && !emp) return results;
+
+  return results.filter(r=>{
+    const okCTO=!ctos.length || ctos.includes(String(r.cto));
+    const okEMP=!emp || String(r.empalme).toUpperCase()===emp.toUpperCase();
+    return okCTO && okEMP;
+  });
+}
+
+async function analizarArchivo(file){
+  if(!file) throw new Error("No se ha seleccionado ningún archivo.");
+
+  const name=file.name.toLowerCase();
+
+  if(name.endsWith(".pdf") || file.type==="application/pdf"){
+    rawText=await readPDF(file);
+    $("raw").textContent=rawText;
+
+    const encontrados=parsePDF(rawText);
+
+    results=encontrados;
+    const filtrados=filtrar();
+
+    $("diag").innerHTML=
+      `Páginas/texto procesados · CTO detectadas: <b>${encontrados.length}</b> · `+
+      `Resultados mostrados: <b>${filtrados.length}</b>`;
+
+    results=filtrados;
+    render();
+    return;
+  }
+
+  throw new Error(
+    "Esta versión paralela está centrada en la recuperación de PDF. "+
+    "El KML/KMZ se mantiene para la siguiente prueba."
+  );
+}
+
+$("go").addEventListener("click",async()=>{
+  const file=$("file").files[0];
+
+  $("status").textContent="Procesando...";
+  $("status").className="muted";
+  $("diag").textContent="";
+  $("rows").innerHTML=
+    '<tr><td colspan="9">Procesando...</td></tr>';
+
   try{
-    mostrarArchivoCompartido(archivo);
-    $("estadoCompartido").textContent="Extrayendo datos automáticamente…";
-    const dt=new DataTransfer();
-    dt.items.add(archivo);
-    $("archivo").files=dt.files;
-    await extraer();
-    $("estadoCompartido").textContent =
-      registros.length
-      ? "✓ Extracción terminada. Resultados mostrados abajo."
-      : "⚠ Archivo recibido, pero no se encontraron resultados.";
-    const tabla=$("tabla");
-    if(tabla) setTimeout(()=>tabla.scrollIntoView({behavior:"smooth",block:"start"}),250);
+    await analizarArchivo(file);
+    $("status").textContent=
+      `Procesado correctamente. Resultados: ${results.length}`;
+    $("status").className="ok";
   }catch(e){
     console.error(e);
-    $("estadoCompartido").textContent="No se pudo procesar: "+e.message;
+    $("status").textContent=
+      "Error procesando el archivo: "+e.message;
+    $("status").className="err";
+    $("rows").innerHTML=
+      `<tr><td colspan="9">${esc(e.message)}</td></tr>`;
   }
-}
+});
 
-async function recuperarArchivoCompartido(){
+$("clear").addEventListener("click",async()=>{
+  $("file").value="";
+  $("cto").value="";
+  $("emp").value="";
+  $("rows").innerHTML=
+    '<tr><td colspan="9">Todavía no se han realizado búsquedas.</td></tr>';
+  $("raw").textContent="No hay datos cargados.";
+  $("diag").textContent="";
+  $("status").textContent="Esperando PDF.";
+  $("status").className="muted";
+  results=[];
+  rawText="";
+  $("csv").disabled=true;
+
   try{
-    if(!("indexedDB" in window)) return false;
-    const db=await new Promise((resolve,reject)=>{
-      const r=indexedDB.open("piloto-cto-share",1);
-      r.onupgradeneeded=()=>r.result.createObjectStore("files");
-      r.onsuccess=()=>resolve(r.result);
-      r.onerror=()=>reject(r.error);
-    });
-    const archivo=await new Promise((resolve,reject)=>{
-      const tx=db.transaction("files","readonly");
-      const req=tx.objectStore("files").get("latest");
-      req.onsuccess=()=>resolve(req.result||null);
-      req.onerror=()=>reject(req.error);
-    });
-    if(!archivo) return false;
+    await clearSharedFiles();
+    renderSharedFiles([]);
+  }catch(e){}
+});
 
-    const blob=new Blob([archivo.data],{type:archivo.type||"application/octet-stream"});
-    const file=new File([blob],archivo.name,{type:archivo.type||"application/octet-stream"});
-    const tx=db.transaction("files","readwrite");
-    tx.objectStore("files").delete("latest");
-    await new Promise(resolve=>{tx.oncomplete=resolve; tx.onerror=resolve;});
-    await procesarArchivoCompartido(file);
-    return true;
-  }catch(e){
-    console.warn("No se pudo recuperar el archivo compartido",e);
-    return false;
-  }
-}
+$("csv").addEventListener("click",()=>{
+  if(!results.length)return;
 
-function instalarRecepcionAndroid(){
-  // File Handling API, cuando el navegador/PWA la ofrece.
-  if("launchQueue" in window && "files" in window.launchQueue){
-    window.launchQueue.setConsumer(async params=>{
-      if(!params.files || !params.files.length) return;
-      try{
-        const file=await params.files[0].getFile();
-        await procesarArchivoCompartido(file);
-      }catch(e){
-        estado("Error recibiendo el archivo compartido: "+e.message,"error");
+  const headers=[
+    "CTO","Nombre CTO","Empalme","DV","Patilla",
+    "Fibra","Tramo/cable","Ubicación","Evidencias"
+  ];
+
+  const rows=results.map(r=>[
+    r.cto,
+    r.nombre,
+    r.empalme,
+    r.dv,
+    r.patilla,
+    r.fibra,
+    r.tramos.join(" | "),
+    r.referencias.join(" | "),
+    r.evidencias.join(" | ")
+  ]);
+
+  const csv=[
+    headers,
+    ...rows
+  ].map(row=>
+    row.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(";")
+  ).join("\n");
+
+  const blob=new Blob(
+    ["\ufeff"+csv],
+    {type:"text/csv;charset=utf-8"}
+  );
+
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="piloto_cto_resultados.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+
+/* =========================================================
+   RECEPCIÓN DESDE WHATSAPP / ANDROID SHARE TARGET
+   ========================================================= */
+
+const DB_NAME="piloto-cto-share-paralelo";
+const DB_STORE="files";
+
+function openShareDB(){
+  return new Promise((resolve,reject)=>{
+    const r=indexedDB.open(DB_NAME,1);
+
+    r.onupgradeneeded=()=>{
+      if(!r.result.objectStoreNames.contains(DB_STORE)){
+        r.result.createObjectStore(
+          DB_STORE,
+          {
+            keyPath:"id",
+            autoIncrement:true
+          }
+        );
       }
+    };
+
+    r.onsuccess=()=>resolve(r.result);
+    r.onerror=()=>reject(r.error);
+  });
+}
+
+async function saveSharedFile(file){
+  const db=await openShareDB();
+
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(DB_STORE,"readwrite");
+
+    tx.objectStore(DB_STORE).add({
+      name:file.name,
+      type:file.type,
+      size:file.size,
+      blob:file
     });
+
+    tx.oncomplete=resolve;
+    tx.onerror=()=>reject(tx.error);
+  });
+}
+
+async function getSharedFiles(){
+  const db=await openShareDB();
+
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(DB_STORE,"readonly");
+    const r=tx.objectStore(DB_STORE).getAll();
+
+    r.onsuccess=()=>resolve(r.result||[]);
+    r.onerror=()=>reject(r.error);
+  });
+}
+
+async function clearSharedFiles(){
+  const db=await openShareDB();
+
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(DB_STORE,"readwrite");
+
+    tx.objectStore(DB_STORE).clear();
+
+    tx.oncomplete=resolve;
+    tx.onerror=()=>reject(tx.error);
+  });
+}
+
+function renderSharedFiles(files){
+  const box=$("sharedBox");
+  const list=$("sharedFiles");
+  const received=$("receivedList");
+
+  if(!files.length){
+    box.style.display="none";
+    received.textContent="";
+    return;
   }
-  // Share Target API: el service worker guarda el archivo y redirige aquí.
-  window.addEventListener("load",async()=>{
-    const url=new URL(location.href);
-    if(url.searchParams.get("shared")==="1"){
-      await recuperarArchivoCompartido();
-      history.replaceState({},document.title,location.pathname);
-    }
-  });
+
+  box.style.display="block";
+
+  list.innerHTML=files.map((f
+  async function init(){
+  await registerShare();
+  await loadSharedFiles();
+
+  const params=new URLSearchParams(location.search);
+
+  if(params.get("shared")==="1"){
+    $("status").textContent=
+      "Recepción terminada. Archivo recibido desde WhatsApp.";
+    $("status").className="ok";
+  }
+
+  if(params.get("shared")==="error"){
+    $("status").textContent=
+      "No se pudo recibir el archivo compartido.";
+    $("status").className="err";
+  }
 }
 
-instalarRecepcionAndroid();
-
-function limpiarTexto(v){
-return String(v??"").replace(/\s+/g," ").trim();
-}
-
-function escapar(v){
-return String(v??"")
-.replaceAll("&","&amp;")
-.replaceAll("<","&lt;")
-.replaceAll(">","&gt;")
-.replaceAll('"',"&quot;")
-.replaceAll("'","&#039;");
-}
-
-function estado(m,t=""){
-$("estado").textContent=m;
-$("estado").className="estado "+t;
-}
-
-function normalizar(v){
-return limpiarTexto(v)
-.toUpperCase()
-.normalize("NFD")
-.replace(/[\u0300-\u036f]/g,"")
-.replace(/[^A-Z0-9]+/g,"");
-}
-
-function lista(v){
-return String(v||"")
-.split(/[\s,;]+/)
-.map(x=>x.replace(/^CTO/i,"").trim())
-.filter(Boolean);
-}
-
-function nombreElemento(p){
-const n=[...p.getElementsByTagName("*")]
-.find(x=>x.localName==="Data"&&x.getAttribute("name")==="nombreElemento");
-const value=n?[...n.getElementsByTagName("*")]
-.find(x=>x.localName==="value"):null;
-return value?limpiarTexto(value.textContent):"";
-}
-
-function data(p,nombre){
-const d=[...p.getElementsByTagName("*")]
-.find(x=>x.localName==="Data"&&x.getAttribute("name")===nombre);
-if(!d)return"";
-const v=[...d.getElementsByTagName("*")]
-.find(x=>x.localName==="value");
-return v?limpiarTexto(v.textContent):"";
-}
-
-function primer(p,nombre){
-const x=[...p.getElementsByTagName("*")]
-.find(e=>e.localName===nombre);
-return x?limpiarTexto(x.textContent):"";
-}
-
-function separarCable(nombre){
-const t=limpiarTexto(nombre);
-let m=t.match(/^(.+?),\s*(A\d+\/\d+.*)$/i);
-if(m)return{descripcion:limpiarTexto(m[1]),cable:limpiarTexto(m[2])};
-m=t.match(/\b(A\d+\/\d+)\b/i);
-return{
-descripcion:m?limpiarTexto(t.replace(m[1],"").replace(/,\s*$/,"")):t,
-cable:m?m[1]:""
-};
-}
-
-function numeroCTO(nombre,id){
-let m=String(nombre).match(/CTO[^0-9]*(\d+)/i);
-return m?m[1]:(id||"");
-}
-
-function enlaceMaps(lat,lon){
-if(lat===""||lon==="")return"";
-return"https://www.google.com/maps/search/?api=1&query="+
-encodeURIComponent(lat+","+lon);
-}
-
-function enlaceBusqueda(texto){
-if(!texto)return"";
-return"https://www.google.com/maps/search/?api=1&query="+
-encodeURIComponent(texto);
-}
-
-/* ================= KML/KMZ ================= */
-
-async function leerKMLKMZ(archivo){
-const n=archivo.name.toLowerCase();
-
-if(n.endsWith(".kml"))return await archivo.text();
-
-const zip=await JSZip.loadAsync(await archivo.arrayBuffer());
-const nombres=Object.keys(zip.files)
-.filter(x=>x.toLowerCase().endsWith(".kml"))
-.sort((a,b)=>{
-if(a.toLowerCase()==="doc.kml")return-1;
-if(b.toLowerCase()==="doc.kml")return 1;
-return a.length-b.length;
-});
-
-if(!nombres.length)throw Error("El KMZ no contiene ningún KML.");
-return await zip.files[nombres[0]].async("text");
-}
-
-function analizarKML(xml){
-const doc=new DOMParser().parseFromString(xml,"text/xml");
-if(doc.getElementsByTagName("parsererror").length)
-throw Error("El KML no tiene un XML válido.");
-
-const ps=[...doc.getElementsByTagName("*")]
-.filter(x=>x.localName==="Placemark");
-
-const elementos=ps.map(p=>{
-const id=p.getAttribute("id")||data(p,"id")||"";
-const name=primer(p,"name");
-const ne=nombreElemento(p)||name;
-const cable=separarCable(ne);
-const coordenadas=primer(p,"coordinates");
-let lon="",lat="";
-
-if(coordenadas){
-const c=coordenadas.split(/\s+/)[0].split(",");
-lon=c[0]||"";
-lat=c[1]||"";
-}
-
-return{
-id,name,nombreElemento:ne,
-elementoTipo:data(p,"elementType"),
-nombreLinea:data(p,"nombreLinea"),
-lineasPeticion:data(p,"lineasPeticion"),
-fibIni:data(p,"fibIni"),
-fibFin:data(p,"fibFin"),
-longitud:data(p,"longitudElemento"),
-distancia:data(p,"distanciaAcumulada"),
-estructuraInicio:data(p,"estructuraInicio"),
-estructuraFinal:data(p,"estructuraFinal"),
-orden:data(p,"ordenTramo"),
-coordenadas,
-lat,lon,
-cable:cable.cable,
-descripcionCable:cable.descripcion
-};
-});
-
-const ctos=elementos.filter(x=>
-/CTO/i.test(x.name)||/CTO/i.test(x.nombreElemento)
-);
-
-const cables=elementos.filter(x=>
-/^FO:/i.test(x.name)||x.cable||/\bFO\b/i.test(x.nombreElemento)
-);
-
-const empalmes=elementos.filter(x=>
-/C_EMP|EMPALME/i.test(x.name+" "+x.nombreElemento)
-);
-
-return{elementos,ctos,cables,empalmes};
-}
-
-function divisorPatilla(c){
-const t=[
-c.lineasPeticion,c.nombreLinea,c.nombreElemento
-].join(" ");
-
-let m=t.match(/(DV[-\s]?\d+)\s*[,;]\s*(\d+)/i);
-if(m)return{
-divisor:m[1].replace(/\s+/g,"").toUpperCase(),
-patilla:m[2]
-};
-
-m=t.match(/(DV[-\s]?\d+)/i);
-return{
-divisor:m?m[1].replace(/\s+/g,"").toUpperCase():"",
-patilla:""
-};
-}
-
-function buscarEmpalmes(datos,cto,divisor,filtro){
-const salida=[];
-const numero=divisor.replace(/[^\d]/g,"");
-const objetivo=normalizar(filtro);
-
-for(const e of datos.empalmes){
-const t=[
-e.name,e.nombreElemento,e.nombreLinea,e.lineasPeticion
-].join(" ");
-
-if(!new RegExp("DV[- ]?"+numero,"i").test(t)&&
-!t.toUpperCase().includes(divisor.toUpperCase()))continue;
-
-const numeroEmpalme=
-(e.nombreElemento.match(/N[º°]?\s*(\d+)/i)||[])[1]||
-(e.name.match(/(\d+)/)||[])[1]||
-e.id;
-
-const identidad=normalizar(
-numeroEmpalme+" "+e.nombreElemento+" "+e.name
-);
-
-if(objetivo&&!identidad.includes(objetivo)&&
-!objetivo.includes(normalizar(numeroEmpalme)))continue;
-
-salida.push({
-valor:numeroEmpalme,
-e:e,
-evidencia:e.name+" → "+(e.nombreElemento||e.lineasPeticion)
-});
-}
-
-return dedupEmpalmes(salida);
-}
-
-function dedupEmpalmes(a){
-const s=new Set();
-return a.filter(x=>{
-const k=normalizar(x.valor+"|"+x.evidencia);
-if(s.has(k))return false;
-s.add(k);return true;
-});
-}
-
-function buscarCables(cables,cto){
-const salida=[];
-const linea=normalizar(cto.nombreLinea);
-const estructura=normalizar(cto.estructuraInicio);
-const fibra=String(cto.fibIni||cto.fibFin||"");
-
-for(const c of cables){
-const coincide=
-(linea&&normalizar(c.nombreLinea)===linea)||
-(estructura&&(
-normalizar(c.estructuraInicio)===estructura||
-normalizar(c.estructuraFinal)===estructura))||
-(fibra&&(c.fibIni===fibra||c.fibFin===fibra));
-
-if(coincide)salida.push(c);
-}
-
-return dedupCables(salida);
-}
-
-function dedupCables(a){
-const s=new Set();
-return a.filter(x=>{
-const k=normalizar([
-x.cable,x.descripcionCable,x.nombreLinea,
-x.fibIni,x.fibFin,x.longitud
-].join("|"));
-if(s.has(k))return false;
-s.add(k);return true;
-});
-}
-
-/* ================= PDF ================= */
-
-async function leerPDF(archivo){
-const pdf=await pdfjsLib.getDocument({
-data:await archivo.arrayBuffer()
-}).promise;
-
-const paginas=[];
-
-for(let i=1;i<=pdf.numPages;i++){
-const p=await pdf.getPage(i);
-const c=await p.getTextContent();
-paginas.push(c.items.map(x=>x.str).join("\n"));
-}
-
-return paginas.join("\n");
-}
-
-function analizarPDF(texto){
-const lineas=texto.split(/\r?\n/)
-.map(l=>limpiarTexto(l))
-.filter(Boolean);
-
-const ctos=[];
-let actual=null;
-
-for(let i=0;i<lineas.length;i++){
-const l=lineas[i];
-
-let m=l.match(/\bCTO\s+(\d+)\s*,\s*([^,]*)(?:,\s*(.*))?/i);
-
-if(m){
-actual={
-cto:m[1],
-nombreCto:l,
-divisor:"",
-patilla:"",
-fibra:"",
-empalme:"",
-referencias:[],
-evidencias:[l]
-};
-ctos.push(actual);
-}
-
-if(!actual)continue;
-
-if(/DV[-\s]?\d+/i.test(l)){
-const d=l.match(/(DV[-\s]?\d+)\s*[,;]?\s*(\d+)?/i);
-if(d){
-actual.divisor=d[1].replace(/\s+/g,"").toUpperCase();
-actual.patilla=d[2]||"";
-}
-}
-
-const f=l.match(/(?:FM|F\.?O\.?)\s*#?\s*(\d+(?:[-+]\d+)*)/i);
-if(f)actual.fibra=f[1];
-
-if(/EMPALME|C[_ ]?EMP|E\s*\d+/i.test(l))
-actual.empalme=l;
-
-if(/BARRIO|CALLE|AVENIDA|PLAZA|CONCHA|CARRANZA|MUNICIPIO|VIZCAYA/i.test(l))
-actual.referencias.push(l);
-
-actual.evidencias.push(l);
-}
-
-for(const c of ctos){
-c.referencias=[...new Set(c.referencias)]
-.filter(x=>!/^CTO/i.test(x))
-.slice(0,8);
-
-c.referencia=c.referencias.join(", ");
-c.maps=enlaceBusqueda(
-[c.nombreCto,c.referencia].filter(Boolean).join(" ")
-);
-}
-
-return ctos;
-}
-
-/* ================= PROCESAMIENTO ================= */
-
-function registroKML(cto,datos,filtroEmpalme){
-const rel=divisorPatilla(cto);
-const fibra=cto.fibIni||cto.fibFin||"";
-const emps=rel.divisor?
-buscarEmpalmes(datos,cto,rel.divisor,filtroEmpalme):[];
-
-if(filtroEmpalme&&!emps.length)return[];
-
-const cables=buscarCables(datos.cables,cto);
-const ee=emps.length?emps:[{
-valor:"No disponible",
-evidencia:"Empalme no localizado"
-}];
-
-const cc=cables.length?cables:[{
-cable:"No localizado",
-descripcionCable:"No disponible",
-nombreElemento:"",
-longitud:"",
-distancia:"",
-evidencia:"Cable no localizado"
-}];
-
-const salida=[];
-
-for(const e of ee)for(const c of cc){
-let puntos=0;
-if(cto.id)puntos++;
-if(rel.divisor)puntos++;
-if(rel.patilla)puntos++;
-if(fibra)puntos++;
-if(e.valor!=="No disponible")puntos++;
-if(c.cable!=="No localizado")puntos++;
-
-salida.push({
-cto:numeroCTO(cto.nombreElemento,cto.id),
-nombreCto:cto.nombreElemento,
-empalme:e.valor,
-divisor:rel.divisor||"No disponible",
-patilla:rel.patilla||"No disponible",
-fibra:fibra||"No disponible",
-cable:c.cable||"No localizado",
-descripcionCable:c.descripcionCable||"No disponible",
-tipoElemento:c.nombreElemento||cto.elementoTipo,
-longitud:c.longitud||cto.longitud,
-distancia:c.distancia||cto.distancia,
-lat:cto.lat,
-lon:cto.lon,
-ubicacion:cto.lat&&cto.lon?
-"Exacta · coordenadas KML":"Sin coordenadas",
-referencia:cto.lat&&cto.lon?
-cto.lat+", "+cto.lon:"",
-maps:enlaceMaps(cto.lat,cto.lon),
-estado:puntos>=5?"Completa":puntos>=2?"Parcial":"Sin datos",
-evidencias:[
-"CTO: "+cto.nombreElemento,
-"Divisor: "+(rel.divisor||"No localizado"),
-"Patilla: "+(rel.patilla||"No localizada"),
-"Fibra: "+(fibra||"No localizada"),
-e.evidencia||"",
-c.evidencia||(
-c.nombreElemento+" | "+c.nombreLinea
-)
-]
-});
-}
-
-return salida;
-}
-
-function registroPDF(c){
-return{
-cto:c.cto,
-nombreCto:c.nombreCto,
-empalme:c.empalme||"No disponible",
-divisor:c.divisor||"No disponible",
-patilla:c.patilla||"No disponible",
-fibra:c.fibra||"No disponible",
-cable:"No disponible",
-descripcionCable:"PDF sin geometría de cable",
-tipoElemento:"PDF",
-longitud:"",
-distancia:"",
-lat:"",
-lon:"",
-ubicacion:c.referencia?
-"Aproximada · referencia PDF":"Sin ubicación",
-referencia:c.referencia,
-maps:c.maps,
-estado:c.divisor&&c.fibra?"Parcial":"Sin datos",
-evidencias:c.evidencias
-};
-}
-
-function claveRegistro(x){
-return normalizar([
-x.cto,x.empalme,x.divisor,x.patilla,
-x.fibra,x.cable,x.lat,x.lon
-].join("|"));
-}
-
-function deduplicarRegistros(a){
-const mapa=new Map();
-
-for(const x of a){
-const k=claveRegistro(x);
-
-if(!mapa.has(k)){
-mapa.set(k,x);
-}else{
-const anterior=mapa.get(k);
-anterior.evidencias=[
-...new Set([
-...anterior.evidencias,
-...x.evidencias
-])
-];
-eliminados++;
-}
-}
-
-return [...mapa.values()];
-}
-
-async function extraer(){
-const archivo=$("archivo").files[0];
-
-if(!archivo){
-estado("Selecciona primero un archivo.","error");
-return;
-}
-
-registros=[];
-elementosPDF=[];
-eliminados=0;
-
-try{
-estado("Procesando "+archivo.name+"...");
-$("diagnostico").textContent="";
-$("texto").textContent="Procesando...";
-
-const nombre=archivo.name.toLowerCase();
-
-if(nombre.endsWith(".kml")||nombre.endsWith(".kmz")){
-const xml=await leerKMLKMZ(archivo);
-textoOriginal=xml;
-$("texto").textContent=xml;
-
-const datos=analizarKML(xml);
-const filtros=lista($("ctos").value);
-const filtroEmpalme=limpiarTexto($("empalme").value);
-
-let ctos=datos.ctos;
-
-if(filtros.length){
-ctos=ctos.filter(c=>{
-const n=numeroCTO(c.nombreElemento,c.id);
-return filtros.includes(n)||filtros.includes(c.id);
-});
-}
-
-for(const c of ctos)
-registros.push(...registroKML(c,datos,filtroEmpalme));
-
-$("diagnostico").innerHTML=
-"Placemark: <b>"+datos.elementos.length+"</b> · "+
-"CTO: <b>"+datos.ctos.length+"</b> · "+
-"Cables: <b>"+datos.cables.length+"</b> · "+
-"Empalmes: <b>"+datos.empalmes.length+"</b> · "+
-"CTO con coordenadas: <b>"+
-datos.ctos.filter(x=>x.lat&&x.lon).length+"</b>";
-
-}else if(nombre.endsWith(".pdf")){
-const texto=await leerPDF(archivo);
-textoOriginal=texto;
-$("texto").textContent=texto;
-
-elementosPDF=analizarPDF(texto);
-const filtros=lista($("ctos").value);
-
-let ctos=elementosPDF;
-
-if(filtros.length)
-ctos=ctos.filter(c=>filtros.includes(c.cto));
-
-const filtroEmpalme=normalizar($("empalme").value);
-
-if(filtroEmpalme)
-ctos=ctos.filter(c=>
-normalizar(c.empalme+" "+c.evidencias.join(" "))
-.includes(filtroEmpalme)
-);
-
-registros=ctos.map(registroPDF);
-
-$("diagnostico").innerHTML=
-"Páginas PDF procesadas · CTO detectadas: <b>"+
-elementosPDF.length+"</b> · Ubicaciones aproximadas: <b>"+
-elementosPDF.filter(x=>x.referencia).length+"</b>";
-
-}else{
-throw Error("Formato no compatible.");
-}
-
-registros=deduplicarRegistros(registros);
-pintar();
-$("csv").disabled=!registros.length;
-
-estado(
-"Procesado correctamente. Resultados: "+
-registros.length+" · Duplicados eliminados: "+
-eliminados,
-registros.length?"ok":"error"
-);
-
-}catch(e){
-console.error(e);
-estado("Error procesando el archivo: "+e.message,"error");
-$("csv").disabled=true;
-}
-}
-
-/* ================= TABLA ================= */
-
-function pintar(){
-const tabla=$("tabla");
-
-if(!registros.length){
-tabla.innerHTML=
-'<tr><td colspan="15" class="vacia">No se han encontrado resultados.</td></tr>';
-$("resumen").innerHTML="";
-return;
-}
-
-const completas=registros.filter(x=>x.estado==="Completa").length;
-const parciales=registros.filter(x=>x.estado==="Parcial").length;
-const ctos=new Set(registros.map(x=>x.cto)).size;
-const exactas=registros.filter(x=>x.lat&&x.lon).length;
-const aproximadas=registros.filter(x=>!x.lat&&x.referencia).length;
-
-$("resumen").innerHTML=`
-<div class="indicador"><strong>${ctos}</strong>CTO</div>
-<div class="indicador"><strong>${registros.length}</strong>Resultados</div>
-<div class="indicador"><strong>${completas}</strong>Completos</div>
-<div class="indicador"><strong>${parciales}</strong>Parciales</div>
-<div class="indicador"><strong>${exactas}</strong>Maps exactos</div>
-<div class="indicador"><strong>${aproximadas}</strong>Maps aproximados</div>
-`;
-
-tabla.innerHTML=registros.map((x,i)=>{
-const clase=x.estado==="Completa"?"completa":
-x.estado==="Parcial"?"parcial":"no";
-
-const maps=x.maps?
-`<a class="btn-maps" target="_blank" href="${escapar(x.maps)}">Abrir Maps</a>`:
-"Sin enlace";
-
-const copiar=x.referencia?
-`<button class="btn-copiar" onclick="copiarTexto(${i})">Copiar</button>`:"";
-
-return`
-<tr>
-<td>${escapar(x.cto)}</td>
-<td>${escapar(x.nombreCto)}</td>
-<td>${escapar(x.empalme)}</td>
-<td>${escapar(x.divisor)}</td>
-<td>${escapar(x.patilla)}</td>
-<td>${escapar(x.fibra)}</td>
-<td>${escapar(x.cable)}</td>
-<td>${escapar(x.descripcionCable)}</td>
-<td>${escapar(x.tipoElemento)}</td>
-<td>${escapar(x.longitud)}</td>
-<td>${escapar(x.distancia)}</td>
-<td>
-<div>${escapar(x.ubicacion)}</div>
-<div class="coordenadas">${escapar(x.referencia)}</div>
-${copiar}
-</td>
-<td>${maps}</td>
-<td><span class="badge ${clase}">${escapar(x.estado)}</span></td>
-<td>${x.evidencias.map(e=>`<div class="evidencia">${escapar(e)}</div>`).join("")}</td>
-</tr>`;
-}).join("");
-}
-
-function copiarTexto(i){
-const x=registros[i];
-const texto=x.lat&&x.lon?
-x.lat+","+x.lon:
-x.referencia||"";
-navigator.clipboard.writeText(texto)
-.then(()=>estado("Datos de ubicación copiados.","ok"))
-.catch(()=>estado("No se pudo copiar automáticamente.","error"));
-}
-
-/* ================= CSV ================= */
-
-function campoCSV(v){
-return'"'+String(v??"").replaceAll('"','""')+'"';
-}
-
-function descargarCSV(){
-if(!registros.length)return;
-
-const cab=[
-"CTO","Nombre CTO","Empalme","Divisor","Patilla","Fibra",
-"Cable","Descripción cable","Tipo","Longitud","Distancia",
-"Ubicación","Referencia/Coordenadas","Enlace Maps",
-"Estado","Evidencias"
-];
-
-const filas=registros.map(x=>[
-x.cto,x.nombreCto,x.empalme,x.divisor,x.patilla,x.fibra,
-x.cable,x.descripcionCable,x.tipoElemento,x.longitud,x.distancia,
-x.ubicacion,x.referencia,x.maps,x.estado,
-x.evidencias.join(" | ")
-]);
-
-const contenido=[cab,...filas]
-.map(f=>f.map(campoCSV).join(";"))
-.join("\n");
-
-const blob=new Blob(["\ufeff"+contenido],{
-type:"text/csv;charset=utf-8"
-});
-
-const a=document.createElement("a");
-a.href=URL.createObjectURL(blob);
-a.download="resultados_cto_v2_3.csv";
-a.click();
-
-setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-}
-
-/* ================= EVENTOS ================= */
-
-$("extraer").addEventListener("click",extraer);
-$("csv").addEventListener("click",descargarCSV);
-
-$("limpiar").addEventListener("click",()=>{
-archivoCompartido=null;
-if($("recepcionCompartir")) $("recepcionCompartir").hidden=true;
-registros=[];
-elementosPDF=[];
-textoOriginal="";
-eliminados=0;
-
-$("archivo").value="";
-$("ctos").value="";
-$("empalme").value="";
-$("texto").textContent="No hay datos cargados.";
-$("diagnostico").textContent="";
-$("resumen").innerHTML="";
-$("csv").disabled=true;
-$("estado").textContent="";
-$("estado").className="estado";
-
-$("tabla").innerHTML=
-'<tr><td colspan="15" class="vacia">Todavía no se han realizado búsquedas.</td></tr>';
-$("recepcionCompartir").hidden = true;
-});
-
-if("serviceWorker" in navigator){
-  window.addEventListener("load",()=>{
-    navigator.serviceWorker.register("./sw.js")
-      .catch(e=>console.warn("Service Worker:",e));
-  });
-}
+init();
 </script>
 </body>
 </html>
