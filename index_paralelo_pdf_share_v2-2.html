@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Piloto CTO — PDF + WhatsApp paralelo</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#17202a">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
+<style>
+body{font-family:Arial;margin:0;background:#f5f7fa;color:#17202a}
+.wrap{max-width:1400px;margin:auto;padding:14px}
+.card{background:#fff;border:1px solid #dde3ea;border-radius:12px;padding:16px;margin:12px 0}
+input,button{padding:10px;border-radius:8px;border:1px solid #cbd5e1;font:inherit}
+button{background:#17202a;color:#fff;cursor:pointer}
+button:disabled{opacity:.5}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:7px;border-bottom:1px solid #e5e7eb;text-align:left;vertical-align:top}
+th{background:#f1f5f9;white-space:nowrap}
+pre{white-space:pre-wrap;max-height:360px;overflow:auto;background:#111827;color:#e5e7eb;padding:12px;border-radius:8px}
+.muted{color:#667085}
+.ok{color:#087f5b}.err{color:#c92a2a}.warn{color:#b54708}
+.badge{display:inline-block;padding:3px 7px;border-radius:12px;background:#eef2ff}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="card">
+<h1>Piloto CTO — PDF + WhatsApp paralelo</h1>
+<div class="muted">Prueba independiente. No modifica el piloto publicado.</div>
+<div id="sharedBox" class="card" style="margin-top:12px;display:none;background:#eefbf5;border-color:#b7e4ce">
+  <b>📲 Archivo recibido desde Compartir</b>
+  <div id="sharedFiles" style="margin-top:6px"></div>
+</div>
+<p><b>PDF · CTO · DV · patilla · fibra · E = empalme · referencias de ubicación</b></p>
+</div>
+
+<div class="card">
+<h2>1. Cargar PDF</h2>
+<input id="file" type="file" accept=".pdf,application/pdf,.kml,.kmz">
+<div id="receivedList" class="muted" style="margin-top:8px"></div>
+<div class="grid" style="margin-top:12px">
+<label>CTO<br><input id="cto" placeholder="22076, 22069"></label>
+<label>Empalme<br><input id="emp" placeholder="E8545 o 8545"></label>
+</div>
+<p>
+<button id="go">Extraer datos</button>
+<button id="clear">Limpiar</button>
+<button id="csv" disabled>Descargar CSV</button>
+</p>
+<div id="status" class="muted">Esperando PDF.</div>
+<div id="diag" class="muted"></div>
+</div>
+
+<div class="card">
+<h2>2. Resultados</h2>
+<div style="overflow:auto">
+<table>
+<thead><tr>
+<th>CTO</th><th>Nombre CTO</th><th>Empalme</th><th>DV</th><th>Patilla</th>
+<th>Fibra</th><th>Tramo/cable</th><th>Ubicación</th><th>Evidencias</th>
+</tr></thead>
+<tbody id="rows"><tr><td colspan="9">Todavía no se han realizado búsquedas.</td></tr></tbody>
+</table>
+</div>
+</div>
+
+<div class="card">
+<h2>3. Texto reconstruido del PDF</h2>
+<pre id="raw">No hay datos cargados.</pre>
+</div>
+</div>
+
+<script type="module">
+const pdfjs = await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs");
+pdfjs.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
+
+let results=[], rawText="";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function normalizarEspacios(s){
+  return String(s??"").replace(/\s+/g," ").trim();
+}
+
+function lista(v){
+  return String(v||"").split(/[\s,;]+/).map(x=>x.replace(/^CTO/i,"")).filter(Boolean);
+}
+
+/*
+ * Punto clave de esta versión:
+ * PDF.js suele devolver varios "items" para una misma línea.
+ * No asumimos que cada item sea una línea. Agrupamos por coordenada Y
+ * y ordenamos por X antes de analizar CTO/DV/fibra/empalme.
+ */
+async function readPDF(file){
+  const pdf=await pdfjs.getDocument({data:await file.arrayBuffer()}).promise;
+  const pages=[];
+  for(let pageNo=1;pageNo<=pdf.numPages;pageNo++){
+    const page=await pdf.getPage(pageNo);
+    const content=await page.getTextContent();
+    const items=content.items.map(x=>({
+      str:String(x.str||"").trim(),
+      x:Number(x.transform?.[4]||0),
+      y:Number(x.transform?.[5]||0),
+      w:Number(x.width||0)
+    })).filter(x=>x.str);
+
+    const groups=[];
+    for(const item of items){
+      let group=groups.find(g=>Math.abs(g.y-item.y)<=3.5);
+      if(!group){group={y:item.y,items:[]};groups.push(group);}
+      group.items.push(item);
+    }
+
+    groups.sort((a,b)=>b.y-a.y);
+    const lines=groups.map(g=>{
+      g.items.sort((a,b)=>a.x-b.x);
+      let line="",last=null;
+      for(const item of g.items){
+        const gap=last===null ? 0 : item.x-(last.x+last.w);
+        if(line && gap>2.5) line+=" ";
+        line+=item.str;
+        last=item;
+      }
+      return normalizarEspacios(line);
+    }).filter(Boolean);
+
+    pages.push(lines.join("\n"));
+  }
+  return pages.join("\n\n");
+}
+
+function buscarDV(texto){
+  let m=texto.match(/DV[-\s]?(\d+)\s*[,;]\s*(\d+(?:\s*[-/]\s*\d+)?)/i);
+  if(m)return {dv:"DV-"+m[1],patilla:m[2].replace(/\s+/g,"")};
+  m=texto.match(/DV[-\s]?(\d+)/i);
+  return m ? {dv:"DV-"+m[1],patilla:""} : null;
+}
+
+function buscarFibra(texto){
+  let m=texto.match(/(?:FM|F\.?\s*O\.?|FIBRA)\s*#?\s*(\d+(?:\s*[-+]\s*\d+)*)/i);
+  return m ? m[1].replace(/\s+/g,"") : "";
+}
+
+function buscarEmpalme(texto){
+  let m=texto.match(/\bE\s*[-_]?\s*(\d{3,})\b/i);
+  if(m)return "E"+m[1];
+  m=texto.match(/\bEMPALME\s*[:#-]?\s*(\d{3,})\b/i);
+  return m ? "E"+m[1] : "";
+}
+
+function esReferencia(texto){
+  return /BARRIO|CALLE|AVENIDA|PLAZA|CONCHA|CARRANZA|MUNICIPIO|VIZCAYA|UGART|GIPUZKOA|ZABALLA/i.test(texto);
+}
+
+function esTramo(texto){
+  return /\bA\d+\/\d+\b|\b\d+\s*F\.?\s*O\.?\b|\b(?:KT|PKP|TKT)\b/i.test(texto);
+}
+
+function parsePDF(texto){
+  const lines=texto.split(/\r?\n/).map(normalizarEspacios).filter(Boolean);
+  const out=[];
+  let current=null;
+
+  const start=(num,line)=>{
+    current={
+      cto:num,nombre:line,empalme:"",dv:"",patilla:"",fibra:"",
+      tramos:[],referencias:[],evidencias:[line]
+    };
+    out.push(current);
+  };
+
+  for(const line of lines){
+    const m=line.match(/\bC\s*T\s*O\s*[-:]?\s*(\d+)\b/i);
+    if(m) start(m[1],line);
+    if(!current) continue;
+
+    const dv=buscarDV(line);
+    if(dv){current.dv=dv.dv;current.patilla=dv.patilla;}
+
+    const fibra=buscarFibra(line);
+    if(fibra) current.fibra=fibra;
+
+    const emp=buscarEmpalme(line);
+    if(emp) current.empalme=emp;
+
+    if(esTramo(line) && !current.tramos.includes(line))
+      current.tramos.push(line);
+
+    if(esReferencia(line) && !current.referencias.includes(line))
+      current.referencias.push(line);
+
+    if(!current.evidencias.includes(line))
+      current.evidencias.push(line);
+  }
+
+  /*
+   * Segundo intento: si el PDF no dejó "CTO ..." como una línea,
+   * buscamos CTO dentro del texto continuo y usamos una ventana local.
+   */
+  if(!out.length){
+    const compact=normalizarEspacios(texto);
+    const matches=[...compact.matchAll(/\bC\s*T\s*O\s*[-:]?\s*(\d+)\b/gi)];
+    for(const m of matches){
+      const context=compact.slice(Math.max(0,m.index-80),Math.min(compact.length,m.index+500));
+      const r={
+        cto:m[1],nombre:"CTO "+m[1],empalme:buscarEmpalme(context),
+        dv:"",patilla:"",fibra:buscarFibra(context),
+        tramos:[],referencias:[],evidencias:[context]
+      };
+      const dv=buscarDV(context);
+      if(dv){r.dv=dv.dv;r.patilla=dv.patilla;}
+      if(esTramo(context))r.tramos.push(context);
+      if(esReferencia(context))r.referencias.push(context);
+      out.push(r);
+    }
+  }
+
+  return out.map(r=>({
+    ...r,
+    ubicacion:r.referencias.slice(0,8).join(" · "),
+    evidencia:r.evidencias.slice(0,25).join("\n")
+  }));
+}
+
+function render(){
+  const filters=lista($("cto").value);
+  const emp=normalizarEspacios($("emp").value).toUpperCase().replace(/\s+/g,"");
+  let a=results;
+
+  if(filters.length) a=a.filter(r=>filters.includes(r.cto));
+  if(emp) a=a.filter(r=>(r.empalme+" "+r.evidencia).toUpperCase().replace(/\s+/g,"").includes(emp));
+
+  $("rows").innerHTML=a.length ? a.map(r=>`
+    <tr>
+      <td>${esc(r.cto)}</td><td>${esc(r.nombre)}</td><td>${esc(r.empalme||"No localizado")}</td>
+      <td>${esc(r.dv||"No localizado")}</td><td>${esc(r.patilla||"No localizada")}</td>
+      <td>${esc(r.fibra||"No localizada")}</td><td>${esc(r.tramos.join(" | ")||"No localizado")}</td>
+      <td>${esc(r.ubicacion||"Sin referencia")}</td><td><pre style="max-height:180px">${esc(r.evidencia)}</pre></td>
+    </tr>`).join("")
+    : '<tr><td colspan="9">No hay resultados con los filtros actuales.</td></tr>';
+
+  $("csv").disabled=!a.length;
+  return a;
+}
+
+
+const DB_NAME="piloto-cto-share-paralelo";
+const DB_STORE="files";
+function openShareDB(){return new Promise((resolve,reject)=>{const r=indexedDB.open(DB_NAME,1);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains(DB_STORE))r.result.createObjectStore(DB_STORE,{keyPath:"id",autoIncrement:true});};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
+async function saveSharedFile(file){const db=await openShareDB();return new Promise((resolve,reject)=>{const tx=db.transaction(DB_STORE,"readwrite");tx.objectStore(DB_STORE).add({name:file.name,type:file.type,size:file.size,blob:file});tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});}
+async function getSharedFiles(){const db=await openShareDB();return new Promise((resolve,reject)=>{const tx=db.transaction(DB_STORE,"readonly");const r=tx.objectStore(DB_STORE).getAll();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error);});}
+async function clearSharedFiles(){const db=await openShareDB();return new Promise((resolve,reject)=>{const tx=db.transaction(DB_STORE,"readwrite");tx.objectStore(DB_STORE).clear();tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});}
+function renderSharedFiles(files){
+  const box=$("sharedBox"), list=$("sharedFiles"), received=$("receivedList");
+  if(!files.length){box.style.display="none";received.textContent="";return;}
+  box.style.display="block";
+  list.innerHTML=files.map((f,i)=>`<div>${i+1}. <b>${esc(f.name)}</b> · ${Math.round(f.size/1024)} KB</div>`).join("");
+  received.innerHTML=`📲 ${files.length} archivo(s) recibido(s) desde WhatsApp. Se puede procesar desde el botón <b>Extraer datos</b>.`;
+}
+async function loadSharedFiles(){
+  try{
+    const files=await getSharedFiles();
+    renderSharedFiles(files);
+    const first=files.find(f=>/\.pdf$/i.test(f.name));
+    if(first){
+      const dt=new DataTransfer();dt.items.add(new File([first.blob],first.name,{type:first.type||"application/pdf"}));$("file").files=dt.files;
+    }
+  }catch(e){console.warn("No se pudieron leer archivos compartidos",e);}
+}
+async function registerShare(){
+  if("serviceWorker" in navigator){
+    try{await navigator.serviceWorker.register("./sw.js",{scope:"./"});}catch(e){console.warn("Service Worker no registrado",e);}
+  }
+}
+
+$("go").onclick=async()=>{
+  const file=$("file").files[0];
+  if(!file){$("status").textContent="Selecciona primero un PDF.";return;}
+  try{
+    $("status").textContent="Procesando PDF y reconstruyendo líneas…";
+    $("diag").textContent="";
+    rawText=await readPDF(file);
+    $("raw").textContent=rawText.slice(0,50000);
+    results=parsePDF(rawText);
+    render();
+    $("diag").innerHTML=
+      "Páginas/texto reconstruido · <b>CTO detectadas: "+results.length+
+      "</b> · CTO con empalme E: <b>"+results.filter(x=>x.empalme).length+
+      "</b> · CTO con DV: <b>"+results.filter(x=>x.dv).length+"</b>";
+    $("status").innerHTML=results.length
+      ? '<span class="ok">✓ PDF procesado. Esta es la prueba paralela.</span>'
+      : '<span class="warn">⚠ PDF leído, pero todavía no se detectó ninguna CTO.</span>';
+  }catch(e){
+    console.error(e);
+    $("status").innerHTML='<span class="err">Error procesando el PDF: '+esc(e.message)+'</span>';
+  }
+};
+
+$("cto").oninput=render;
+$("emp").oninput=render;
+
+$("clear").onclick=async()=>{
+  results=[];rawText="";
+  $("file").value="";$("cto").value="";$("emp").value="";
+  $("raw").textContent="No hay datos cargados.";
+  $("diag").textContent="";$("status").textContent="Esperando PDF.";
+  $("rows").innerHTML='<tr><td colspan="9">Todavía no se han realizado búsquedas.</td></tr>';
+  $("csv").disabled=true;
+  await clearSharedFiles();
+  renderSharedFiles([]);
+};
+
+$("csv").onclick=()=>{
+  const a=render();
+  if(!a.length)return;
+  const q=v=>`"${String(v??"").replaceAll('"','""')}"`;
+  const h=["CTO","Nombre CTO","Empalme","DV","Patilla","Fibra","Tramos/cable","Ubicación","Evidencias"];
+  const rows=[h,...a.map(r=>[
+    r.cto,r.nombre,r.empalme,r.dv,r.patilla,r.fibra,
+    r.tramos.join(" | "),r.ubicacion,r.evidencia
+  ])].map(row=>row.map(q).join(";")).join("\n");
+  const link=document.createElement("a");
+  link.href=URL.createObjectURL(new Blob(["\ufeff"+rows],{type:"text/csv;charset=utf-8"}));
+  link.download="piloto_cto_pdf_recuperacion_paralelo.csv";
+  link.click();
+};
+loadSharedFiles();
+registerShare();
+</script>
+</body>
+</html>
