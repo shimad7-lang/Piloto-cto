@@ -1,4 +1,4 @@
-const CACHE_NAME = "piloto-cto-v6-share";
+const CACHE_NAME = "piloto-cto-v7-share";
 const ARCHIVOS_APP = [
 "./",
 "./index.html",
