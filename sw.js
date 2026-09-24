@@ -11,6 +11,27 @@ caches.open(CACHE_NAME)
 .then(cache => cache.addAll(ARCHIVOS_APP))
 .then(() => self.skipWaiting())
 );
+});self.addEventListener("fetch", event => {
+const request = event.request;
+const url = new URL(request.url);
+
+// Recepción de archivos desde Android / WhatsApp
+if (
+request.method === "POST" &&
+url.pathname.endsWith("/share-target")
+) {
+event.respondWith(recibirArchivoCompartido(request));
+return;
+}
+
+// Funcionamiento normal de la aplicación
+if (request.method === "GET") {
+event.respondWith(
+caches.match(request).then(cached => {
+return cached || fetch(request);
+})
+);
+}
 });
 
 self.addEventListener("activate", event => {
@@ -26,26 +47,7 @@ keys
 });
 
 self.addEventListener("fetch", event => {
-const request = event.request;
 
-// Recepción de archivos desde Android / WhatsApp
-if (
-request.method === "POST" &&
-new URL(request.url).searchParams.get("shared") === "1"
-) {
-event.respondWith(recibirArchivoCompartido(request));
-return;
-}
-
-// Funcionamiento normal de la aplicación
-if (request.method === "GET") {
-event.respondWith(
-caches.match(request).then(cached => {
-return cached || fetch(request);
-})
-);
-}
-});
 
 async function recibirArchivoCompartido(request) {
 try {
