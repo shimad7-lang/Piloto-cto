@@ -46,7 +46,6 @@ keys
 );
 });
 
-self.addEventListener("fetch", event => {
 
 
 async function recibirArchivoCompartido(request) {
