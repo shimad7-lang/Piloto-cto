@@ -194,35 +194,6 @@ async function procesarArchivoCompartido(archivo){
   }
 }
 
-async function recuperarArchivoCompartido(){
-  try{
-    if(!("indexedDB" in window)) return false;
-    const db=await new Promise((resolve,reject)=>{
-      const r=indexedDB.open("piloto-cto-share",1);
-      r.onupgradeneeded=()=>r.result.createObjectStore("files");
-      r.onsuccess=()=>resolve(r.result);
-      r.onerror=()=>reject(r.error);
-    });
-    const archivo=await new Promise((resolve,reject)=>{
-      const tx=db.transaction("files","readonly");
-      const req=tx.objectStore("files").get("latest");
-      req.onsuccess=()=>resolve(req.result||null);
-      req.onerror=()=>reject(req.error);
-    });
-    if(!archivo) return false;
-
-    const blob=new Blob([archivo.data],{type:archivo.type||"application/octet-stream"});
-    const file=new File([blob],archivo.name,{type:archivo.type||"application/octet-stream"});
-    const tx=db.transaction("files","readwrite");
-    tx.objectStore("files").delete("latest");
-    await new Promise(resolve=>{tx.oncomplete=resolve; tx.onerror=resolve;});
-    await procesarArchivoCompartido(file);
-    return true;
-  }catch(e){
-    console.warn("No se pudo recuperar el archivo compartido",e);
-    return false;
-  }
-}
 
 function instalarRecepcionAndroid(){
   // File Handling API, cuando el navegador/PWA la ofrece.
@@ -236,7 +207,91 @@ function instalarRecepcionAndroid(){
         estado("Error recibiendo el archivo compartido: "+e.message,"error");
       }
     });
+  }async function recuperarArchivoCompartido(){
+  try{
+    if(!("indexedDB" in window)) throw new Error("IndexedDB no disponible");
+
+    const db=await new Promise((resolve,reject)=>{
+      const r=indexedDB.open("piloto-cto-share",1);
+
+      r.onupgradeneeded=()=>{
+        if(!r.result.objectStoreNames.contains("files")){
+          r.result.createObjectStore("files");
+        }
+      };
+
+      r.onsuccess=()=>resolve(r.result);
+      r.onerror=()=>reject(r.error);
+    });
+
+    let archivo=null;
+
+    // Esperamos brevemente por si el Service Worker
+    // todavía está terminando de guardar el archivo.
+    for(let intento=0; intento<6 && !archivo; intento++){
+      archivo=await new Promise((resolve,reject)=>{
+        const tx=db.transaction("files","readonly");
+        const req=tx.objectStore("files").get("latest");
+
+        req.onsuccess=()=>resolve(req.result||null);
+        req.onerror=()=>reject(req.error);
+      });
+
+      if(!archivo && intento<5){
+        await new Promise(resolve=>setTimeout(resolve,300));
+      }
+    }
+
+    if(!archivo){
+      db.close();
+
+      if($("estadoCompartido")){
+        $("estadoCompartido").textContent=
+          "⚠ WhatsApp abrió el piloto, pero el archivo no quedó disponible.";
+      }
+
+      return false;
+    }
+
+    const blob=new Blob([archivo.data],{
+      type:archivo.type||"application/octet-stream"
+    });
+
+    const file=new File(
+      [blob],
+      archivo.name||"archivo-compartido",
+      {type:archivo.type||"application/octet-stream"}
+    );
+
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction("files","readwrite");
+
+      tx.objectStore("files").delete("latest");
+
+      tx.oncomplete=resolve;
+      tx.onerror=()=>reject(tx.error);
+      tx.onabort=()=>reject(
+        tx.error||new Error("No se pudo limpiar el archivo recibido")
+      );
+    });
+
+    db.close();
+
+    await procesarArchivoCompartido(file);
+
+    return true;
+
+  }catch(e){
+    console.warn("No se pudo recuperar el archivo compartido",e);
+
+    if($("estadoCompartido")){
+      $("estadoCompartido").textContent=
+        "⚠ Error al recuperar el archivo: "+(e.message||e);
+    }
+
+    return false;
   }
+}
   // Share Target API: el service worker guarda el archivo y redirige aquí.
   window.addEventListener("load",async()=>{
     const url=new URL(location.href);
