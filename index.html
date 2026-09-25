@@ -928,11 +928,7 @@ async function recuperarArchivoCompartido(){
     const url=new URL(location.href);
     const error=url.searchParams.get("error");
 
-    if(error==="no-file"){
-      if(info) info.textContent="⚠ WhatsApp no envió ningún archivo.";
-      if(estadoRec) estadoRec.textContent="No se recibió ningún archivo.";
-      return false;
-    }
+     }
 
     if(error==="no-file"){
   const debug=url.searchParams.get("debug") || "";
