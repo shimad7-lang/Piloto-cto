@@ -934,10 +934,19 @@ async function recuperarArchivoCompartido(){
       return false;
     }
 
-    if(error==="processing"){
-      if(info) info.textContent="⚠ No se pudo guardar el archivo compartido.";
-      if(estadoRec) estadoRec.textContent="Error al recibir el archivo.";
-      return false;
+    if(error==="no-file"){
+  const debug=url.searchParams.get("debug") || "";
+
+  if(info)
+    info.textContent="⚠ No se encontró el archivo compartido.";
+
+  if(estadoRec)
+    estadoRec.textContent=
+      debug
+        ? "Diagnóstico: " + debug
+        : "No se recibió ningún archivo.";
+
+  return false;
     }
 
     const db=await new Promise((resolve,reject)=>{
