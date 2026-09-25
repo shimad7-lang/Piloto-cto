@@ -50,8 +50,7 @@ keys
 async function recibirArchivoCompartido(request) {
 try {
 
-const formData = await request.formData();
-const resumen = [];
+
 
 for (const [nombre, valor] of formData.entries()) {
   resumen.push(
