@@ -430,7 +430,169 @@ function instalarRecepcionAndroid(){
     const url=new URL(location.href);
 
     if(url.searchParams.get("shared")==="1"){
+async function recuperarArchivoCompartido(){
+  try{
+    const panel=$("recepcionCompartir");
+    const info=$("archivoCompartido");
+    const estadoRec=$("estadoCompartido");
 
+    if(panel) panel.hidden=false;
+    if(info) info.textContent="Archivo compartido recibido. Buscando datos…";
+    if(estadoRec) estadoRec.textContent="Buscando el archivo recibido por WhatsApp…";
+
+    const url=new URL(location.href);
+    const errorCompartido=url.searchParams.get("error");
+
+    if(errorCompartido==="no-file"){
+      if(info) info.textContent="⚠ WhatsApp no envió ningún archivo.";
+      if(estadoRec) estadoRec.textContent="No se recibió ningún archivo.";
+      return false;
+    }
+
+    if(errorCompartido==="processing"){
+      if(info) info.textContent="⚠ No se pudo guardar el archivo compartido.";
+      if(estadoRec) estadoRec.textContent="Error al recibir el archivo.";
+      return false;
+    }
+
+    if(!("indexedDB" in window)){
+      throw new Error("IndexedDB no disponible");
+    }
+
+    const db=await new Promise((resolve,reject)=>{
+      const r=indexedDB.open("piloto-cto-share",1);
+
+      r.onupgradeneeded=()=>{
+        if(!r.result.objectStoreNames.contains("files")){
+          r.result.createObjectStore("files");
+        }
+      };
+
+      r.onsuccess=()=>resolve(r.result);
+      r.onerror=()=>reject(r.error);
+    });
+
+    let archivo=null;
+
+    for(let intento=0; intento<6 && !archivo; intento++){
+      archivo=await new Promise((resolve,reject)=>{
+        const tx=db.transaction("files","readonly");
+        const req=tx.objectStore("files").get("latest");
+
+        req.onsuccess=()=>resolve(req.result||null);
+        req.onerror=()=>reject(req.error);
+      });
+
+      if(!archivo && intento<5){
+        await new Promise(resolve=>setTimeout(resolve,400));
+      }
+    }
+
+    if(!archivo){
+      db.close();
+
+      if(info){
+        info.textContent=
+          "⚠ WhatsApp abrió el piloto, pero no se encontró el archivo.";
+      }
+
+      if(estadoRec){
+        estadoRec.textContent=
+          "No hay ningún archivo disponible para procesar.";
+      }
+
+      return false;
+    }
+
+    if(info){
+      info.textContent=
+        "Recibido: "+(archivo.name||"archivo-compartido");
+    }
+
+    if(estadoRec){
+      estadoRec.textContent=
+        "✓ Archivo recibido. Extrayendo datos automáticamente…";
+    }
+
+    const blob=new Blob(
+      [archivo.data],
+      {type:archivo.type||"application/octet-stream"}
+    );
+
+    const file=new File(
+      [blob],
+      archivo.name||"archivo-compartido",
+      {type:archivo.type||"application/octet-stream"}
+    );
+
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction("files","readwrite");
+
+      tx.objectStore("files").delete("latest");
+
+      tx.oncomplete=resolve;
+      tx.onerror=()=>reject(tx.error);
+      tx.onabort=()=>reject(
+        tx.error||new Error("No se pudo limpiar el archivo recibido")
+      );
+    });
+
+    db.close();
+
+    await procesarArchivoCompartido(file);
+
+    return true;
+
+  }catch(e){
+    console.warn("No se pudo recuperar el archivo compartido",e);
+
+    const panel=$("recepcionCompartir");
+    const info=$("archivoCompartido");
+    const estadoRec=$("estadoCompartido");
+
+    if(panel) panel.hidden=false;
+
+    if(info){
+      info.textContent=
+        "⚠ Error al recuperar el archivo compartido.";
+    }
+
+    if(estadoRec){
+      estadoRec.textContent=
+        "Error: "+(e.message||e);
+    }
+
+    return false;
+  }
+}
+
+
+function instalarRecepcionAndroid(){
+
+  if("launchQueue" in window && "files" in window.launchQueue){
+
+    window.launchQueue.setConsumer(async params=>{
+
+      if(!params.files || !params.files.length) return;
+
+      try{
+        const file=await params.files[0].getFile();
+        await procesarArchivoCompartido(file);
+
+      }catch(e){
+        estado(
+          "Error recibiendo el archivo compartido: "+e.message,
+          "error"
+        );
+      }
+    });
+  }
+
+  window.addEventListener("load",async()=>{
+
+    const url=new URL(location.href);
+
+    if(url.searchParams.get("shared")==="1"){
       await recuperarArchivoCompartido();
 
       history.replaceState(
