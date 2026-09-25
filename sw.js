@@ -51,7 +51,27 @@ async function recibirArchivoCompartido(request) {
 try {
 
 const formData = await request.formData();
+const resumen = [];
 
+for (const [nombre, valor] of formData.entries()) {
+  resumen.push(
+    nombre +
+    "=" +
+    (
+      valor &&
+      typeof valor !== "string" &&
+      typeof valor.arrayBuffer === "function"
+        ? "ARCHIVO:" +
+          (valor.name || "(sin nombre)") +
+          ":" +
+          (valor.type || "(sin tipo)") +
+          ":" +
+          (valor.size || 0) +
+          " bytes"
+        : String(valor)
+    )
+  );
+}
 const resumen = [];
 
 for (const [nombre, valor] of formData.entries()) {
