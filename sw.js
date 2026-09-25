@@ -86,19 +86,24 @@ async function recibirArchivoCompartido(request) {
     }
 
     if (!archivo) {
-      const detalle =
-        "POST recibido. " +
-        "Content-Type: " +
-        (request.headers.get("content-type") || "(ninguno)") +
-        " | Campos: " +
-        (resumen.length ? resumen.join(" ; ") : "(ninguno)");
 
-      return Response.redirect(
-        "./?shared=1&error=no-file&debug=" +
-        encodeURIComponent(detalle),
-        303
-      );
-    }
+  const detalle =
+    "POST recibido. " +
+    "Content-Type: " +
+    (request.headers.get("content-type") || "(ninguno)") +
+    " | Campos: " +
+    (
+      resumen.length
+        ? resumen.join(" ; ")
+        : "(ninguno)"
+    );
+
+  return Response.redirect(
+    "./?shared=1&error=no-file&debug=" +
+    encodeURIComponent(detalle),
+    303
+  );
+}
 
     const buffer = await archivo.arrayBuffer();
     const db = await abrirBaseDatos();
