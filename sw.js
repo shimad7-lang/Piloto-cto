@@ -18,9 +18,9 @@ self.addEventListener("fetch", event => {
   const request = event.request;
   const url = new URL(request.url);
 
-  if (
+if (
     request.method === "POST" &&
-    url.pathname.endsWith("/share-target")
+    url.pathname === new URL("./", self.registration.scope).pathname
   ) {
     event.respondWith(recibirArchivoCompartido(request));
     return;
