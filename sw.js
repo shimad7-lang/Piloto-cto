@@ -1,4 +1,4 @@
-const CACHE_NAME = "piloto-cto-v7-share";
+const CACHE_NAME = "piloto-cto-v8-share";
 const ARCHIVOS_APP = [
 "./",
 "./index.html",
@@ -52,12 +52,38 @@ async function recibirArchivoCompartido(request) {
 try {
 const formData = await request.formData();
 
-let archivo = formData.get("file");
+let archivo = null;
 
-// Android puede enviar el archivo con otro nombre.
-if (!archivo || typeof archivo.arrayBuffer !== "function") {
-  for (const valor of formData.values()) {
+// Android/WhatsApp puede usar distintos nombres para la parte del archivo.
+const nombresArchivo = [
+  "file",
+  "files",
+  "media",
+  "attachment",
+  "document"
+];
+
+for (const nombre of nombresArchivo) {
+  const valores = formData.getAll(nombre);
+
+  for (const valor of valores) {
     if (valor && typeof valor.arrayBuffer === "function") {
+      archivo = valor;
+      break;
+    }
+  }
+
+  if (archivo) break;
+}
+
+// Último recurso: buscar cualquier Blob/File dentro del multipart.
+if (!archivo) {
+  for (const [nombre, valor] of formData.entries()) {
+    if (
+      valor &&
+      typeof valor !== "string" &&
+      typeof valor.arrayBuffer === "function"
+    ) {
       archivo = valor;
       break;
     }
