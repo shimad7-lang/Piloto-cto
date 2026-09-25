@@ -47,54 +47,78 @@ keys
 });
 
 
-
 async function recibirArchivoCompartido(request) {
 try {
+
 const formData = await request.formData();
+
+const resumen = [];
+
+for (const [nombre, valor] of formData.entries()) {
+
+  if (
+    valor &&
+    typeof valor !== "string" &&
+    typeof valor.arrayBuffer === "function"
+  ) {
+
+    resumen.push(
+      nombre +
+      "=ARCHIVO:" +
+      (valor.name || "(sin nombre)") +
+      ":" +
+      (valor.type || "(sin tipo)") +
+      ":" +
+      (valor.size || 0) +
+      " bytes"
+    );
+
+  } else {
+
+    resumen.push(
+      nombre + "=" + String(valor)
+    );
+
+  }
+
+}
 
 let archivo = null;
 
-// Android/WhatsApp puede usar distintos nombres para la parte del archivo.
-const nombresArchivo = [
-  "file",
-  "files",
-  "media",
-  "attachment",
-  "document"
-];
+for (const [nombre, valor] of formData.entries()) {
 
-for (const nombre of nombresArchivo) {
-  const valores = formData.getAll(nombre);
+  if (
+    valor &&
+    typeof valor !== "string" &&
+    typeof valor.arrayBuffer === "function"
+  ) {
 
-  for (const valor of valores) {
-    if (valor && typeof valor.arrayBuffer === "function") {
-      archivo = valor;
-      break;
-    }
+    archivo = valor;
+    break;
+
   }
 
-  if (archivo) break;
 }
 
-// Último recurso: buscar cualquier Blob/File dentro del multipart.
 if (!archivo) {
-  for (const [nombre, valor] of formData.entries()) {
-    if (
-      valor &&
-      typeof valor !== "string" &&
-      typeof valor.arrayBuffer === "function"
-    ) {
-      archivo = valor;
-      break;
-    }
-  }
-}
 
-if (!archivo || typeof archivo.arrayBuffer !== "function") {
+  const detalle =
+    "POST recibido. " +
+    "Content-Type: " +
+    (request.headers.get("content-type") || "(ninguno)") +
+    " | Campos: " +
+    (
+      resumen.length
+      ? resumen.join(" ; ")
+      : "(ninguno)"
+    );
+
   return Response.redirect(
-    "./?shared=1&error=no-file",
+    "./?shared=1&error=no-file&debug=" +
+    encodeURIComponent(detalle),
     303
   );
+
 }
 
 const buffer = await archivo.arrayBuffer();
@@ -102,10 +126,9 @@ const buffer = await archivo.arrayBuffer();
 const db = await abrirBaseDatos();
 
 await new Promise((resolve, reject) => {
-  const transaction = db.transaction(
-    "files",
-    "readwrite"
-  );
+
+  const transaction =
+    db.transaction("files", "readwrite");
 
   transaction.objectStore("files").put(
     {
@@ -117,21 +140,25 @@ await new Promise((resolve, reject) => {
         archivo.type ||
         "application/octet-stream",
 
-      data: buffer,
+      data:
+        buffer,
 
       size:
         archivo.size ||
         buffer.byteLength,
 
-      receivedAt: Date.now()
+      receivedAt:
+        Date.now()
     },
     "latest"
   );
 
-  transaction.oncomplete = resolve;
+  transaction.oncomplete =
+    resolve;
 
   transaction.onerror = () =>
     reject(transaction.error);
+
 });
 
 db.close();
@@ -155,6 +182,8 @@ return Response.redirect(
 
 }
 }
+
+
 
 function abrirBaseDatos() {
 return new Promise((resolve, reject) => {
