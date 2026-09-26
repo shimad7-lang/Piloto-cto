@@ -19,7 +19,6 @@ self.addEventListener("fetch", event => {
   const url = new URL(request.url);
 
 if (
-if (
     request.method === "POST" &&
     url.pathname.endsWith("/share-target")
   ) {
@@ -158,4 +157,4 @@ function abrirBaseDatos() {
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
-                }
+  }           
