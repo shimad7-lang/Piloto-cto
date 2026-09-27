@@ -1,8 +1,14 @@
-const CACHE_NAME = "piloto-cto-v14-share-target-post";
+const CACHE_NAME = "piloto-cto-v16-v4-modules";
 
 const ARCHIVOS_APP = [
   "./",
   "./index.html",
+  "./app-core.js",
+  "./app-kml.js",
+  "./app-pdf.js",
+  "./app-processing.js",
+  "./app-ui.js",
+  "./app-share.js",
   "./manifest.webmanifest",
   "./share-target.html"
 ];

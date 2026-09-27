@@ -1,0 +1,59 @@
+name: Deploy paralelo-v4 preview
+
+on:
+  push:
+    branches:
+      - paralelo-v4
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy-preview:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}v4/
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main site
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: site
+
+      - name: Checkout parallel v4
+        uses: actions/checkout@v4
+        with:
+          ref: paralelo-v4
+          path: v4-source
+
+      - name: Prepare isolated preview path
+        run: |
+          mkdir -p site/v4
+          rsync -a --delete \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='tests/' \
+            --exclude='tmp/' \
+            v4-source/ site/v4/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site and v4 preview
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

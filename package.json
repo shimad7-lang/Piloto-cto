@@ -1,0 +1,7 @@
+{
+  "name": "piloto-cto-v4",
+  "private": true,
+  "scripts": {
+    "test": "node tests/run.cjs"
+  }
+}
