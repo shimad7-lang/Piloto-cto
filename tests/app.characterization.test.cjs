@@ -67,7 +67,14 @@ test("KML se clasifica, extrae coordenadas y produce una relación CTO/cable/emp
   api.pintar();
   assert.match(app.elements.get("tabla").innerHTML, /Empalme N 5/);
   assert.match(app.elements.get("tabla").innerHTML, /uuid-emp-5/);
-  assert.match(fs.readFileSync(path.join(ROOT, "index.html"), "utf8"), /<th>Datos EMP<\/th>/);
+  assert.match(app.elements.get("tabla").innerHTML, /entidad-cto.*CTO 123.*entidad-emp.*Empalme N 5/s);
+  assert.match(app.elements.get("tabla").innerHTML, /datos-empalme.*Fibra: 2–3.*UUID: uuid-emp-5/s);
+  assert.match(fs.readFileSync(path.join(ROOT, "index.html"), "utf8"), /<th>Nombre CTO \/ EMP<\/th>/);
+  assert.match(fs.readFileSync(path.join(ROOT, "index.html"), "utf8"), /flex-wrap:nowrap/);
+  api.setState({registros:[{...filas[0],nombreEmpalme:"E8548 C-E UC 6 BD MFT"}]});
+  api.pintar();
+  const filaVisual=app.elements.get("tabla").innerHTML;
+  assert.match(filaVisual,/entidad-cto.*CTO 123.*entidad-emp.*E8548 C-E UC 6 BD MFT/s);
 });
 
 test("la salida CSV separa identificación, nombre y campos propios del EMP", async () => {
@@ -417,6 +424,14 @@ test("File Handling usa launchQueue y el mismo flujo automático de extracción"
   assert.match(app.document.getElementById("estado").textContent, /Resultados: 1/);
 });
 
+test("el Service Worker receptor se registra al inicio, sin esperar al evento load", () => {
+  const llamadas=[];
+  const serviceWorker={register(ruta){llamadas.push(ruta);return Promise.resolve({});}};
+  const app=loadApp({serviceWorker});
+  assert.deepEqual(llamadas,["./sw.js"]);
+  assert.equal(app.events["window:load"],undefined);
+});
+
 test("ruta compartida con error no-file presenta diagnóstico sin exponer los valores del POST", async () => {
   const diagnostic = encodeURIComponent(JSON.stringify({
     method: "POST", path: "/share-target.html", headers: { "content-type": "multipart/form-data" },
@@ -428,13 +443,55 @@ test("ruta compartida con error no-file presenta diagnóstico sin exponer los va
     pathname: "/Piloto-cto/"
   };
   const app = loadApp({ location });
-  await app.events["window:load"]();
+  await app.api.iniciarRecuperacionCompartida();
   const message = app.document.getElementById("estadoCompartido").textContent;
   assert.match(message, /No se recibió ningún archivo/);
   assert.match(message, /title/);
   assert.doesNotMatch(message, /valor real|datos privados/);
-  assert.equal(app.context.history.calls.length, 1);
-  assert.equal(app.context.history.calls[0][2], "/Piloto-cto/");
+  assert.equal(app.context.history.calls.length, 0);
+  assert.equal(typeof app.events["window:pageshow"], "function");
+});
+
+test("el primer lanzamiento compartido recupera y extrae sin esperar al evento load", async () => {
+  const contenido = new TextEncoder().encode(supportedKml());
+  const storedFile = {
+    name: "primer-envio.kml", type: "application/vnd.google-earth.kml+xml",
+    data: contenido.buffer, size: contenido.byteLength
+  };
+  const files = new Map([["first-share-1", storedFile]]);
+  const db = {
+    close() {},
+    transaction() {
+      const transaction = {};
+      transaction.objectStore = () => ({
+        get(id) {
+          const request = {};
+          queueMicrotask(() => { request.result = files.get(id)||null; request.onsuccess?.(); });
+          return request;
+        },
+        delete(id) {
+          queueMicrotask(() => { files.delete(id); transaction.oncomplete?.(); });
+        }
+      });
+      return transaction;
+    }
+  };
+  const indexedDB = { open() {
+    const request = {};
+    queueMicrotask(() => { request.result = db; request.onsuccess?.(); });
+    return request;
+  } };
+  const location = {
+    href: "https://example.test/Piloto-cto/?shared=1&id=first-share-1&source=pwa",
+    search: "?shared=1&id=first-share-1&source=pwa",
+    pathname: "/Piloto-cto/"
+  };
+  const app = loadApp({ location, indexedDB });
+  await app.api.iniciarRecuperacionCompartida();
+  assert.match(app.document.getElementById("estado").textContent, /Resultados: 1/);
+  assert.match(app.document.getElementById("estadoCompartido").textContent, /Extracción terminada/);
+  assert.equal(app.context.history.calls[0][2], "/Piloto-cto/?source=pwa");
+  assert.equal(files.has("first-share-1"), false);
 });
 
 test("CSV conserva BOM, separador punto y coma, escape de comillas y nombre de descarga", async () => {

@@ -12,7 +12,7 @@ function loadWorker() {
   const caches = {
     opened: [],
     async open(name) { caches.opened.push(name); return cache; },
-    async keys() { return ["old-cache", "piloto-cto-v17-v4-emp-data"]; },
+    async keys() { return ["old-cache", "piloto-cto-v18-v4-share-first"]; },
     async delete(name) { caches.deleted = [...(caches.deleted || []), name]; return true; },
     async match(request) { caches.matched = request; return null; }
   };
@@ -74,7 +74,7 @@ test("install precachea aplicación y ruta share-target; activate elimina caché
   const install = { waitUntil(promise) { this.done = promise; } };
   worker.listeners.install(install);
   await install.done;
-  assert.deepEqual(worker.caches.opened, ["piloto-cto-v17-v4-emp-data"]);
+  assert.deepEqual(worker.caches.opened, ["piloto-cto-v18-v4-share-first"]);
   assert.deepEqual(Array.from(worker.cache.precached), ["./", "./index.html", "./app-core.js", "./app-kml.js", "./app-pdf.js", "./app-processing.js", "./app-ui.js", "./app-share.js", "./manifest.webmanifest", "./share-target.html"]);
   assert.equal(worker.self.skipped, true);
 

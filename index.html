@@ -42,9 +42,15 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .indicador{min-width:135px;padding:11px 15px;border-radius:8px;background:#edf2ff}
 .indicador strong{display:block;color:var(--azul);font-size:21px}
 .tabla{overflow:auto}
-table{width:100%;border-collapse:collapse;font-size:12px}
+table{width:max-content;min-width:100%;border-collapse:collapse;font-size:12px}
 th{padding:9px 7px;color:white;background:var(--oscuro);text-align:left;white-space:nowrap}
 td{padding:8px 7px;border-bottom:1px solid #e1e6ed;vertical-align:top}
+.entidad-identidad{display:flex;align-items:flex-start;gap:7px;min-width:230px;max-width:360px;margin:2px 0 7px}
+.entidad-identidad strong{min-width:32px;color:var(--azul);font-size:10px;letter-spacing:.04em}
+.entidad-identidad span{white-space:normal;overflow-wrap:anywhere}
+.entidad-emp{padding-top:6px;border-top:1px solid var(--borde)}
+.datos-empalme{display:flex;flex-wrap:nowrap;gap:12px;width:max-content;max-width:unset;white-space:nowrap}
+.datos-empalme span{display:inline-block;padding:4px 6px;border-radius:5px;background:#edf2ff}
 tr:nth-child(even){background:#f8faff}
 .vacia{padding:25px;color:#68778d;text-align:center}
 .badge{display:inline-block;padding:4px 8px;border-radius:20px;font-size:11px;font-weight:bold}
@@ -116,10 +122,9 @@ accept=".pdf,.kml,.kmz,application/pdf,application/vnd.google-earth.kml+xml,appl
 <thead>
 <tr>
 <th>CTO</th>
-<th>Nombre CTO</th>
+<th>Nombre CTO / EMP</th>
 <th>Nº EMP</th>
 <th>ID EMP</th>
-<th>Nombre EMP</th>
 <th>Datos EMP</th>
 <th>Divisor</th>
 <th>Patilla</th>
@@ -136,7 +141,7 @@ accept=".pdf,.kml,.kmz,application/pdf,application/vnd.google-earth.kml+xml,appl
 </tr>
 </thead>
 <tbody id="tabla">
-<tr><td colspan="18" class="vacia">Todavía no se han realizado búsquedas.</td></tr>
+<tr><td colspan="17" class="vacia">Todavía no se han realizado búsquedas.</td></tr>
 </tbody>
 </table>
 </div>

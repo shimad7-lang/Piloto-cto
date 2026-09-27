@@ -1,7 +1,17 @@
 /* ================= EVENTOS ================= */
 
+let recuperacionCompartidaEnCurso=null;
+
 $("extraer").addEventListener("click",extraer);
 $("csv").addEventListener("click",descargarCSV);
+
+// Registra el receptor al ejecutar la app, no después de `window.load`.
+// Así el primer uso desde la PWA no depende de que ya haya terminado la carga
+// de todos los recursos externos antes de que Android envíe el POST.
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("./sw.js")
+    .catch(e=>console.warn("Service Worker:",e));
+}
 
 $("limpiar").addEventListener("click",()=>{
 archivoCompartido=null;
@@ -22,16 +32,10 @@ $("estado").textContent="";
 $("estado").className="estado";
 
 $("tabla").innerHTML=
-'<tr><td colspan="15" class="vacia">Todavía no se han realizado búsquedas.</td></tr>';
+'<tr><td colspan="17" class="vacia">Todavía no se han realizado búsquedas.</td></tr>';
 $("recepcionCompartir").hidden = true;
 });
 
-if("serviceWorker" in navigator){
-  window.addEventListener("load",()=>{
-    navigator.serviceWorker.register("./sw.js")
-      .catch(e=>console.warn("Service Worker:",e));
-  });
-}
  function mostrarArchivoCompartido(archivo){
   const panel=$("recepcionCompartir");
   const info=$("archivoCompartido");
@@ -283,20 +287,57 @@ function instalarRecepcionAndroid(){
     );
   }
 
-  if(location.search.includes("shared=1")){
+  // `load` espera a que terminen recursos externos (PDF.js/JSZip). En el
+  // primer lanzamiento Android puede suspender la PWA antes de ese evento.
+  // La recuperación empieza al terminar de registrar la aplicación y vuelve
+  // a comprobarse en pageshow cuando Android reactiva una ventana existente.
+  if(location.search.includes("shared=1"))
+    void iniciarRecuperacionCompartida();
 
-    window.addEventListener("load",async()=>{
+  window.addEventListener("pageshow",()=>{
+    if(location.search.includes("shared=1"))
+      void iniciarRecuperacionCompartida();
+  });
+}
 
-      await recuperarArchivoCompartido();
+async function iniciarRecuperacionCompartida(){
+  if(!location.search.includes("shared=1"))return false;
+  if(recuperacionCompartidaEnCurso)return recuperacionCompartidaEnCurso;
 
-      history.replaceState(
-        {},
-        document.title,
-        location.pathname
-      );
+  recuperacionCompartidaEnCurso=(async()=>{
+    const url=new URL(location.href);
+    const id=url.searchParams.get("id");
+    const tieneError=url.searchParams.has("error");
+    const intentos=id&&!tieneError?4:1;
 
-    });
+    for(let intento=0;intento<intentos;intento++){
+      const procesado=await recuperarArchivoCompartido();
+      if(procesado){
+        const destino=new URL(location.href);
+        ["shared","id","error","debug"].forEach(parametro=>
+          destino.searchParams.delete(parametro)
+        );
+        history.replaceState(
+          {},
+          document.title,
+          destino.pathname+destino.search+destino.hash
+        );
+        return true;
+      }
 
+      if(intento+1<intentos)
+        await new Promise(resolve=>setTimeout(resolve,250));
+    }
+
+    // Si el archivo aún no aparece en IndexedDB, se conserva el ID en la URL
+    // para que `pageshow` o un reintento no descarte la recepción.
+    return false;
+  })();
+
+  try{
+    return await recuperacionCompartidaEnCurso;
+  }finally{
+    recuperacionCompartidaEnCurso=null;
   }
 }
 

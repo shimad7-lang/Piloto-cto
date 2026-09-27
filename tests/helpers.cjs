@@ -110,7 +110,7 @@ function makeElement(id) {
   };
 }
 
-function loadApp({ pdfjsLib, JSZip, location, launchQueue } = {}) {
+function loadApp({ pdfjsLib, JSZip, location, launchQueue, indexedDB, serviceWorker } = {}) {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   const source = ["app-core.js", "app-kml.js", "app-pdf.js", "app-processing.js", "app-ui.js", "app-share.js"]
     .map(file => fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n");
@@ -155,7 +155,8 @@ function loadApp({ pdfjsLib, JSZip, location, launchQueue } = {}) {
     window,
     location: appLocation,
     history: { calls: [], replaceState(...args) { this.calls.push(args); } },
-    navigator: {},
+    navigator: serviceWorker?{serviceWorker}: {},
+    indexedDB,
     URL: AppURL,
     Blob,
     File: require("node:buffer").File,
@@ -186,7 +187,8 @@ function loadApp({ pdfjsLib, JSZip, location, launchQueue } = {}) {
     "claveRegistro", "deduplicarRegistros", "extraer", "pintar", "copiarTexto",
     "campoCSV", "descargarCSV", "procesarArchivoCompartido",
     "formatearDiagnosticoRecepcion", "recuperarArchivoCompartido",
-    "borrarArchivoCompartido", "instalarRecepcionAndroid"
+    "borrarArchivoCompartido", "instalarRecepcionAndroid",
+    "iniciarRecuperacionCompartida"
   ];
   const instrumented = source +
     `\nglobalThis.__api={${exported.join(",")},getState:()=>({registros,elementosPDF,textoOriginal,eliminados,archivoCompartido}),setState:(v={})=>{if(v.registros!==undefined)registros=v.registros;if(v.elementosPDF!==undefined)elementosPDF=v.elementosPDF;if(v.eliminados!==undefined)eliminados=v.eliminados;}};`;

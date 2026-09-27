@@ -5,7 +5,7 @@ const tabla=$("tabla");
 
 if(!registros.length){
 tabla.innerHTML=
-'<tr><td colspan="18" class="vacia">No se han encontrado resultados.</td></tr>';
+'<tr><td colspan="17" class="vacia">No se han encontrado resultados.</td></tr>';
 $("resumen").innerHTML="";
 return;
 }
@@ -35,15 +35,21 @@ const maps=x.maps?
 
 const copiar=x.referencia?
 `<button class="btn-copiar" onclick="copiarTexto(${i})">Copiar</button>`:"";
+const identidadCtoEmp=`
+<div class="entidad-identidad entidad-cto"><strong>CTO</strong><span>${escapar(x.nombreCto||x.cto)}</span></div>
+<div class="entidad-identidad entidad-emp"><strong>EMP</strong><span>${escapar(x.nombreEmpalme||"No disponible")}</span></div>`;
+const datosEmpalme=String(x.datosEmpalme||"").split(" · ").filter(Boolean);
+const datosEmpalmeHtml=datosEmpalme.length?
+`<div class="datos-empalme">${datosEmpalme.map(d=>`<span>${escapar(d)}</span>`).join("")}</div>`:
+"No disponible";
 
 return`
 <tr>
 <td>${escapar(x.cto)}</td>
-<td>${escapar(x.nombreCto)}</td>
+<td>${identidadCtoEmp}</td>
 <td>${escapar(x.empalme)}</td>
 <td>${escapar(x.idEmpalme)}</td>
-<td>${escapar(x.nombreEmpalme)}</td>
-<td>${escapar(x.datosEmpalme)}</td>
+<td>${datosEmpalmeHtml}</td>
 <td>${escapar(x.divisor)}</td>
 <td>${escapar(x.patilla)}</td>
 <td>${escapar(x.fibra)}</td>

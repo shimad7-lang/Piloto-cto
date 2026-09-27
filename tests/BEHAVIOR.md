@@ -24,7 +24,7 @@ Estas pruebas fijan el contrato observable de la versión actual. La extracción
 - El manifest anuncia POST `multipart/form-data` a `./share-target.html` con el campo `file` y extensiones PDF/KML/KMZ; conserva `start_url`, `scope` y `file_handlers` para apertura directa.
 - El Service Worker intercepta POST a la ruta canónica y también a la raíz heredada. Busca cualquier parte tipo archivo, valida extensión/MIME, guarda bytes en IndexedDB bajo un ID por envío y responde con una redirección al piloto con `shared=1&id=...`.
 - Si el POST solo contiene texto, redirige con `error=no-file` y un diagnóstico saneado. Los tipos no admitidos o MIME/extensión contradictorios se rechazan.
-- El piloto recupera el archivo de IndexedDB, lo asigna al selector existente, ejecuta la misma extracción manual y después borra el envío. El `launchQueue` permite además recibir archivos mediante File Handling.
+- El piloto registra el Service Worker al inicio; al abrir una URL compartida, recupera IndexedDB inmediatamente sin esperar a que terminen todos los recursos ni al evento `load`. Si todavía no aparece el envío, reintenta conservando el ID en la URL. Al completarlo, asigna el archivo al selector existente, ejecuta la misma extracción y borra el envío. `pageshow` permite reanudar la recuperación si Android reactiva la PWA. El `launchQueue` permite además recibir archivos mediante File Handling.
 - El Service Worker conserva estrategia GET cache-first, precache de la app y activación que elimina cachés antiguas.
 
 ## Alcance de estas pruebas
