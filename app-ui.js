@@ -5,7 +5,7 @@ const tabla=$("tabla");
 
 if(!registros.length){
 tabla.innerHTML=
-'<tr><td colspan="15" class="vacia">No se han encontrado resultados.</td></tr>';
+'<tr><td colspan="18" class="vacia">No se han encontrado resultados.</td></tr>';
 $("resumen").innerHTML="";
 return;
 }
@@ -41,6 +41,9 @@ return`
 <td>${escapar(x.cto)}</td>
 <td>${escapar(x.nombreCto)}</td>
 <td>${escapar(x.empalme)}</td>
+<td>${escapar(x.idEmpalme)}</td>
+<td>${escapar(x.nombreEmpalme)}</td>
+<td>${escapar(x.datosEmpalme)}</td>
 <td>${escapar(x.divisor)}</td>
 <td>${escapar(x.patilla)}</td>
 <td>${escapar(x.fibra)}</td>
@@ -81,14 +84,22 @@ function descargarCSV(){
 if(!registros.length)return;
 
 const cab=[
-"CTO","Nombre CTO","Empalme","Divisor","Patilla","Fibra",
+"CTO","Nombre CTO","Nº EMP","ID EMP","Nombre EMP","Datos EMP",
+"Tipo EMP","Línea EMP","Líneas petición EMP","Fibra inicial EMP","Fibra final EMP",
+"Longitud EMP","Distancia EMP","Orden tramo EMP","Dirección EMP","Fecha instalación EMP",
+"Unidad alta EMP","Unidad baja EMP","NoTe EMP","UUID EMP","Latitud EMP","Longitud geográfica EMP",
+"Estructura inicio EMP","Estructura final EMP","Divisor","Patilla","Fibra",
 "Cable","Descripción cable","Tipo","Longitud","Distancia",
 "Ubicación","Referencia/Coordenadas","Enlace Maps",
 "Estado","Evidencias"
 ];
 
 const filas=registros.map(x=>[
-x.cto,x.nombreCto,x.empalme,x.divisor,x.patilla,x.fibra,
+x.cto,x.nombreCto,x.empalme,x.idEmpalme,x.nombreEmpalme,x.datosEmpalme,
+x.tipoEmpalme,x.lineaEmpalme,x.lineasPeticionEmpalme,x.fibIniEmpalme,x.fibFinEmpalme,
+x.longitudEmpalme,x.distanciaEmpalme,x.ordenEmpalme,x.direccionEmpalme,x.fechaInstalacionEmpalme,
+x.unidadAltaEmpalme,x.unidadBajaEmpalme,x.noTeEmpalme,x.uuidEmpalme,x.latEmpalme,x.lonEmpalme,
+x.estructuraInicioEmpalme,x.estructuraFinalEmpalme,x.divisor,x.patilla,x.fibra,
 x.cable,x.descripcionCable,x.tipoElemento,x.longitud,x.distancia,
 x.ubicacion,x.referencia,x.maps,x.estado,
 x.evidencias.join(" | ")

@@ -215,8 +215,22 @@ function supportedKml() {
     </ExtendedData></Placemark>
     <Placemark id="splice-1"><name>C_EMP 12</name><ExtendedData>
       <Data name="nombreElemento"><value>Empalme N 5 DV-7, 4</value></Data>
-      <Data name="lineasPeticion"><value>DV-7</value></Data>
-    </ExtendedData></Placemark>
+      <Data name="elementType"><value>EQUIPMENT</value></Data>
+      <Data name="direction"><value>DOWN</value></Data>
+      <Data name="distanciaAcumulada"><value>105</value></Data>
+      <Data name="fechaInstalacion"><value>2015-10-21</value></Data>
+      <Data name="estructuraInicio"><value>Arqueta 1</value></Data>
+      <Data name="estructuraFinal"><value>Arqueta 2</value></Data>
+      <Data name="fibIni"><value>2</value></Data>
+      <Data name="fibFin"><value>3</value></Data>
+      <Data name="lineasPeticion"><value>DV-7, 4 (2-3)</value></Data>
+      <Data name="longitudElemento"><value>18 m</value></Data>
+      <Data name="nombreLinea"><value>Linea 1</value></Data>
+      <Data name="ordenTramo"><value>7</value></Data>
+      <Data name="unidadAlta"><value>4</value></Data>
+      <Data name="unidadBaja"><value>3</value></Data>
+      <Data name="uuid"><value>uuid-emp-5</value></Data>
+    </ExtendedData><Point><coordinates>-3.6,40.3,0</coordinates></Point></Placemark>
   </Document></kml>`;
 }
 

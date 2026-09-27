@@ -43,15 +43,21 @@ lat=c[1]||"";
 return{
 id,name,nombreElemento:ne,
 elementoTipo:data(p,"elementType"),
+direccion:data(p,"direction"),
+fechaInstalacion:data(p,"fechaInstalacion"),
 nombreLinea:data(p,"nombreLinea"),
 lineasPeticion:data(p,"lineasPeticion"),
 fibIni:data(p,"fibIni"),
 fibFin:data(p,"fibFin"),
 longitud:data(p,"longitudElemento"),
 distancia:data(p,"distanciaAcumulada"),
+noTe:data(p,"noTe"),
 estructuraInicio:data(p,"estructuraInicio"),
 estructuraFinal:data(p,"estructuraFinal"),
 orden:data(p,"ordenTramo"),
+unidadAlta:data(p,"unidadAlta"),
+unidadBaja:data(p,"unidadBaja"),
+uuid:data(p,"uuid"),
 coordenadas,
 lat,lon,
 cable:cable.cable,
@@ -141,6 +147,7 @@ const salida=[];
 const linea=normalizar(cto.nombreLinea);
 const estructura=normalizar(cto.estructuraInicio);
 const fibra=String(cto.fibIni||cto.fibFin||"");
+const ordenCTO=Number(cto.orden);
 
 // La conexión topológica identifica el cable que termina en la estructura
 // de la CTO. Es más específica que compartir línea o número de fibra.
@@ -151,6 +158,22 @@ normalizar(c.estructuraFinal)===estructura&&
 );
 
 if(llegadas.length)return dedupCables(llegadas);
+}
+
+if(linea&&Number.isInteger(ordenCTO)){
+const tramoAnterior=cables.filter(c=>
+normalizar(c.nombreLinea)===linea&&
+Number(c.orden)===ordenCTO-1
+);
+
+if(tramoAnterior.length){
+// Si hay varios cables del tramo anterior, la fibra que figura en el
+// elemento ayuda a discriminar cuál de ellos llega a la CTO.
+const mismaFibra=tramoAnterior.filter(c=>
+String(c.fibIni||"")===fibra||String(c.fibFin||"")===fibra
+);
+return dedupCables(mismaFibra.length?mismaFibra:tramoAnterior);
+}
 }
 
 for(const c of cables){
@@ -165,17 +188,6 @@ if(coincide)salida.push(c);
 }
 
 const coincidentes=dedupCables(salida);
-const ordenCTO=Number(cto.orden);
-
-if(linea&&fibra&&Number.isInteger(ordenCTO)){
-const llegada=coincidentes.filter(c=>
-normalizar(c.nombreLinea)===linea&&
-Number(c.orden)===ordenCTO-1&&
-(c.fibIni===fibra||c.fibFin===fibra)
-);
-
-if(llegada.length)return dedupCables(llegada);
-}
 
 return coincidentes;
 }

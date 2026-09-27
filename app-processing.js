@@ -2,7 +2,6 @@
 
 function registroKML(cto,datos,filtroEmpalme){
 const rel=divisorPatilla(cto);
-const fibra=cto.fibIni||cto.fibFin||"";
 const emps=rel.divisor?
 buscarEmpalmes(datos,cto,rel.divisor,filtroEmpalme):[];
 
@@ -26,6 +25,29 @@ evidencia:"Cable no localizado"
 const salida=[];
 
 for(const e of ee)for(const c of cc){
+const fibra=c.cable!=="No localizado"?(c.fibFin||c.fibIni||""):"";
+const emp=e.e||{};
+const fibraIniEmpalme=emp.fibIni||"";
+const fibraFinEmpalme=emp.fibFin||"";
+const coordenadasEmpalme=emp.lat&&emp.lon?emp.lat+", "+emp.lon:"";
+const datosEmpalme=[
+emp.elementoTipo&&"Tipo: "+emp.elementoTipo,
+emp.nombreLinea&&"Línea: "+emp.nombreLinea,
+emp.lineasPeticion&&"Líneas petición: "+emp.lineasPeticion,
+(fibraIniEmpalme||fibraFinEmpalme)&&"Fibra: "+[fibraIniEmpalme,fibraFinEmpalme].filter(Boolean).join("–"),
+emp.longitud&&"Longitud: "+emp.longitud,
+emp.distancia&&"Distancia: "+emp.distancia,
+emp.orden&&"Orden tramo: "+emp.orden,
+emp.direccion&&"Dirección: "+emp.direccion,
+emp.fechaInstalacion&&"Instalación: "+emp.fechaInstalacion,
+emp.unidadAlta&&"Unidad alta: "+emp.unidadAlta,
+emp.unidadBaja&&"Unidad baja: "+emp.unidadBaja,
+emp.noTe&&"NoTe: "+emp.noTe,
+emp.uuid&&"UUID: "+emp.uuid,
+coordenadasEmpalme&&"Coordenadas: "+coordenadasEmpalme,
+emp.estructuraInicio&&"Estructura inicio: "+emp.estructuraInicio,
+emp.estructuraFinal&&"Estructura final: "+emp.estructuraFinal
+].filter(Boolean).join(" · ");
 let puntos=0;
 if(cto.id)puntos++;
 if(rel.divisor)puntos++;
@@ -38,6 +60,27 @@ salida.push({
 cto:numeroCTO(cto.nombreElemento,cto.id),
 nombreCto:cto.nombreElemento,
 empalme:e.valor,
+idEmpalme:emp.id||"",
+nombreEmpalme:emp.nombreElemento||emp.name||"",
+tipoEmpalme:emp.elementoTipo||"",
+direccionEmpalme:emp.direccion||"",
+fechaInstalacionEmpalme:emp.fechaInstalacion||"",
+lineaEmpalme:emp.nombreLinea||"",
+lineasPeticionEmpalme:emp.lineasPeticion||"",
+fibIniEmpalme:fibraIniEmpalme,
+fibFinEmpalme:fibraFinEmpalme,
+longitudEmpalme:emp.longitud||"",
+distanciaEmpalme:emp.distancia||"",
+ordenEmpalme:emp.orden||"",
+unidadAltaEmpalme:emp.unidadAlta||"",
+unidadBajaEmpalme:emp.unidadBaja||"",
+noTeEmpalme:emp.noTe||"",
+uuidEmpalme:emp.uuid||"",
+latEmpalme:emp.lat||"",
+lonEmpalme:emp.lon||"",
+estructuraInicioEmpalme:emp.estructuraInicio||"",
+estructuraFinalEmpalme:emp.estructuraFinal||"",
+datosEmpalme,
 divisor:rel.divisor||"No disponible",
 patilla:rel.patilla||"No disponible",
 fibra:fibra||"No disponible",
@@ -58,7 +101,7 @@ evidencias:[
 "CTO: "+cto.nombreElemento,
 "Divisor: "+(rel.divisor||"No localizado"),
 "Patilla: "+(rel.patilla||"No localizada"),
-"Fibra: "+(fibra||"No localizada"),
+"Fibra llegada ("+(c.cable||"cable no localizado")+"): "+(fibra||"No disponible"),
 e.evidencia||"",
 c.evidencia||(
 c.nombreElemento+" | "+c.nombreLinea
@@ -75,6 +118,27 @@ return{
 cto:c.cto,
 nombreCto:c.nombreCto,
 empalme:c.empalme||"No disponible",
+idEmpalme:"",
+nombreEmpalme:"",
+tipoEmpalme:"",
+direccionEmpalme:"",
+fechaInstalacionEmpalme:"",
+lineaEmpalme:"",
+lineasPeticionEmpalme:"",
+fibIniEmpalme:"",
+fibFinEmpalme:"",
+longitudEmpalme:"",
+distanciaEmpalme:"",
+ordenEmpalme:"",
+unidadAltaEmpalme:"",
+unidadBajaEmpalme:"",
+noTeEmpalme:"",
+uuidEmpalme:"",
+latEmpalme:"",
+lonEmpalme:"",
+estructuraInicioEmpalme:"",
+estructuraFinalEmpalme:"",
+datosEmpalme:"",
 divisor:c.divisor||"No disponible",
 patilla:c.patilla||"No disponible",
 fibra:c.fibra||"No disponible",

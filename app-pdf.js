@@ -196,22 +196,63 @@ return da-db;
 })[0];
 }
 
+function mapaDivisor(texto){
+const m=String(texto||"").match(/\b(DV[-\s]?\d+)\s*[,;.]\s*(\d+)(?:\s*-\s*(\d+))?\s*#\s*(\d+)(?:\s*-\s*(\d+))?/i);
+if(!m)return null;
+return{
+divisor:m[1].replace(/\s+/g,"").toUpperCase(),
+patillaInicio:Number(m[2]),
+patillaFin:Number(m[3]||m[2]),
+fibraInicio:Number(m[4]),
+fibraFin:Number(m[5]||m[4])
+};
+}
+
+function fibraDeMapa(mapa,patilla){
+if(!mapa||!Number.isFinite(Number(patilla)))return"";
+const anchoPatillas=mapa.patillaFin-mapa.patillaInicio;
+const anchoFibras=mapa.fibraFin-mapa.fibraInicio;
+if(Number(patilla)<mapa.patillaInicio||Number(patilla)>mapa.patillaFin)return"";
+if(anchoPatillas===anchoFibras)
+return String(mapa.fibraInicio+Number(patilla)-mapa.patillaInicio);
+return mapa.patillaInicio===mapa.patillaFin?String(mapa.fibraInicio):"";
+}
+
 const filaDivisor=masCercana(/\bDV[-\s]?\d+/i,35);
 const divisorTexto=filaDivisor?.texto||"";
 const divisorMatch=divisorTexto.match(/(DV[-\s]?\d+)\s*[,;]?\s*(\d+)?/i);
 const divisor=divisorMatch?divisorMatch[1].replace(/\s+/g,"").toUpperCase():"";
 const patilla=divisorMatch?.[2]||"";
 
-const filaCable=masCercana(/\bA\s*\d+\s*\/\s*\d+\b/i,55);
+const divisorNormalizado=divisor.replace(/[-\s]/g,"");
+const mapas=cercanas.map(f=>({fila:f,mapa:mapaDivisor(f.texto)}))
+.filter(x=>x.mapa&&
+x.mapa.divisor.replace(/[-\s]/g,"")===divisorNormalizado&&
+fibraDeMapa(x.mapa,patilla));
+mapas.sort((a,b)=>{
+const da=fila.y-a.fila.y+Math.abs(a.fila.centro-fila.centro)*0.5;
+const db=fila.y-b.fila.y+Math.abs(b.fila.centro-fila.centro)*0.5;
+return da-db;
+});
+const mapaSeleccionado=mapas[0];
+
+function distanciaDesde(origen,destino){
+return Math.abs(origen.y-destino.y)+Math.abs(origen.centro-destino.centro)*0.5;
+}
+
+const cablesCercanos=cercanas.filter(x=>/\bA\s*\d+\s*\/\s*\d+\b/i.test(x.texto));
+const filaCable=mapaSeleccionado?
+cablesCercanos.sort((a,b)=>distanciaDesde(mapaSeleccionado.fila,a)-distanciaDesde(mapaSeleccionado.fila,b))[0]:
+masCercana(/\bA\s*\d+\s*\/\s*\d+\b/i,55);
 const cableTexto=filaCable?.texto||"";
 const cable=(cableTexto.match(/\b(A\s*\d+\s*\/\s*\d+)\b/i)||[])[1]
 ?.replace(/\s+/g,"")||"";
 const descripcionCable=(cableTexto.match(/\[\s*([^\]]+)\s*\]/)||[])[1]||"";
 
-const filaFibra=masCercana(/(?:FM|F\.?O\.?)\s*#?\s*\d/i,65);
+const filaFibra=mapaSeleccionado?null:masCercana(/(?:FM|F\.?O\.?)\s*#?\s*\d/i,65);
 const fibraTexto=filaFibra?.texto||"";
 const fibraMatch=fibraTexto.match(/(?:FM|F\.?O\.?)\s*#?\s*(\d+(?:[-+]\d+)*)/i);
-const fibra=fibraMatch?fibraMatch[1]:"";
+const fibra=mapaSeleccionado?fibraDeMapa(mapaSeleccionado.mapa,patilla):fibraMatch?fibraMatch[1]:"";
 
 const filaEmpalme=masCercana(/EMPALME|C[_ ]?EMP|\bE\s*\d+/i,45);
 const empalme=filaEmpalme?.texto||"";
@@ -231,7 +272,7 @@ referencias,
 referencia,
 cable,
 descripcionCable,
-evidencias:[fila.texto,...new Set([divisorTexto,cableTexto,fibraTexto,empalme].filter(Boolean))],
+evidencias:[fila.texto,...new Set([divisorTexto,mapaSeleccionado?.fila.texto,cableTexto,fibraTexto,empalme].filter(Boolean))],
 maps:enlaceBusqueda([fila.texto,referencia].filter(Boolean).join(" "))
 });
 }

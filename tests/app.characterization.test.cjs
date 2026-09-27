@@ -32,7 +32,8 @@ test("normalización, listas, cable, CTO y enlaces conservan sus reglas", () => 
 });
 
 test("KML se clasifica, extrae coordenadas y produce una relación CTO/cable/empalme", () => {
-  const { api } = loadApp();
+  const app = loadApp();
+  const { api } = app;
   const datos = plain(api.analizarKML(supportedKml()));
   assert.equal(datos.elementos.length, 3);
   assert.equal(datos.ctos.length, 1);
@@ -46,15 +47,53 @@ test("KML se clasifica, extrae coordenadas y produce una relación CTO/cable/emp
   assert.equal(filas.length, 1);
   assert.equal(filas[0].cto, "123");
   assert.equal(filas[0].empalme, "5");
+  assert.equal(filas[0].idEmpalme, "splice-1");
+  assert.equal(filas[0].nombreEmpalme, "Empalme N 5 DV-7, 4");
+  assert.equal(filas[0].lineaEmpalme, "Linea 1");
+  assert.equal(filas[0].fibIniEmpalme, "2");
+  assert.equal(filas[0].fibFinEmpalme, "3");
+  assert.equal(filas[0].latEmpalme, "40.3");
+  assert.equal(filas[0].lonEmpalme, "-3.6");
+  assert.match(filas[0].datosEmpalme, /UUID: uuid-emp-5/);
+  assert.notEqual(filas[0].referencia, filas[0].latEmpalme+", "+filas[0].lonEmpalme);
   assert.equal(filas[0].divisor, "DV-7");
   assert.equal(filas[0].patilla, "4");
   assert.equal(filas[0].cable, "A1/2");
   assert.equal(filas[0].ubicacion, "Exacta · coordenadas KML");
   assert.equal(filas[0].estado, "Completa");
   assert.equal(api.registroKML(datos.ctos[0], datos, "E999").length, 0);
+
+  api.setState({ registros: filas });
+  api.pintar();
+  assert.match(app.elements.get("tabla").innerHTML, /Empalme N 5/);
+  assert.match(app.elements.get("tabla").innerHTML, /uuid-emp-5/);
+  assert.match(fs.readFileSync(path.join(ROOT, "index.html"), "utf8"), /<th>Datos EMP<\/th>/);
 });
 
-test("CTO 22076 selecciona solo el cable de llegada del tramo anterior con la misma fibra", () => {
+test("la salida CSV separa identificación, nombre y campos propios del EMP", async () => {
+  const { api, links } = loadApp();
+  api.setState({ registros: [{
+    cto: "123", nombreCto: "CTO 123", empalme: "5", idEmpalme: "splice-1",
+    nombreEmpalme: "Empalme N 5", datosEmpalme: "Fibra: 2–3 · UUID: uuid-emp-5",
+    tipoEmpalme: "EQUIPMENT", lineaEmpalme: "Linea 1", lineasPeticionEmpalme: "DV-7,4",
+    fibIniEmpalme: "2", fibFinEmpalme: "3", longitudEmpalme: "18 m",
+    distanciaEmpalme: "105", ordenEmpalme: "7", direccionEmpalme: "DOWN",
+    fechaInstalacionEmpalme: "2015-10-21", unidadAltaEmpalme: "4", unidadBajaEmpalme: "3",
+    noTeEmpalme: "", uuidEmpalme: "uuid-emp-5", latEmpalme: "40.3", lonEmpalme: "-3.6",
+    estructuraInicioEmpalme: "Arqueta 1", estructuraFinalEmpalme: "Arqueta 2",
+    divisor: "DV-7", patilla: "4", fibra: "12", cable: "A1/2", descripcionCable: "8 FO",
+    tipoElemento: "Cable", longitud: "200 m", distancia: "200", ubicacion: "Exacta",
+    referencia: "40.4,-3.7", maps: "", estado: "Completa", evidencias: []
+  }] });
+  api.descargarCSV();
+  const bytes = new Uint8Array(await links[0].blob.arrayBuffer());
+  const text = new TextDecoder().decode(bytes.slice(3));
+  assert.match(text, /"ID EMP";"Nombre EMP";"Datos EMP"/);
+  assert.match(text, /"splice-1";"Empalme N 5";"Fibra: 2–3 · UUID: uuid-emp-5"/);
+  assert.match(text, /"DOWN";"2015-10-21";"4";"3"/);
+});
+
+test("CTO 22076 selecciona el cable del tramo anterior cuya fibra coincide", () => {
   const { api } = loadApp();
   const toCable = (id, nombreElemento, orden, fibra) => {
     const separado = api.separarCable(nombreElemento);
@@ -109,6 +148,33 @@ test("KML prioriza el cable cuyo extremo final conecta con la estructura de la C
 
   const selected = plain(api.buscarCables(cables, cto));
   assert.deepEqual(selected.map(c => c.id), ["arrival"]);
+});
+
+test("KML toma la fibra del cable de llegada y no el identificador fibIni/fibFin de la CTO", () => {
+  const { api } = loadApp();
+  const cto = {
+    id: "15681469", nombreElemento: "CTO MI Nº 22074", nombreLinea: "DV-27209",
+    lineasPeticion: "DV-27209, 2 (66)", orden: "23", fibIni: "66", fibFin: "66",
+    estructuraInicio: "EMPLAZAMIENTO RED (ID 2566677)"
+  };
+  const llegada = {
+    id: "10434966", cable: "A109/230", descripcionCable: "16 FO AER",
+    nombreElemento: "16 FO AER, A109/230", nombreLinea: "DV-27209", orden: "22",
+    fibIni: "9", fibFin: "9", estructuraFinal: "EMPLAZAMIENTO RED (ID 2566677)"
+  };
+  const rows = plain(api.registroKML(cto, { cables: [llegada], empalmes: [] }, ""));
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].cable, "A109/230");
+  assert.equal(rows[0].fibra, "9");
+  assert.match(rows[0].evidencias.join(" "), /Fibra llegada.*9/);
+});
+
+test("KML usa el tramo anterior aunque la fibra del elemento CTO no coincida", () => {
+  const { api } = loadApp();
+  const arrival = { id: "incoming", cable: "A109/230", nombreLinea: "DV-27209", orden: "22", fibIni: "9", fibFin: "9" };
+  const decoy = { id: "older", cable: "A109/228", nombreLinea: "DV-27209", orden: "21", fibIni: "66", fibFin: "66" };
+  const selected = plain(api.buscarCables([arrival, decoy], { nombreLinea: "DV-27209", orden: "23", fibIni: "66" }));
+  assert.deepEqual(selected.map(c => c.id), ["incoming"]);
 });
 
 test("selección KML mantiene el fallback si la CTO no tiene orden de tramo", () => {
@@ -190,7 +256,7 @@ test("PDF detecta CTO, divisor, fibra, empalme y referencia; respeta filtros", a
   assert.equal(pages[0].map(item => item.str).join("\n"), text);
 });
 
-test("PDF de plano asocia divisor, fibra y cable por proximidad a la CTO, no por orden del texto", () => {
+test("PDF de plano conserva el mapeo de fibra del divisor y el cable de llegada", () => {
   const { api } = loadApp();
   const item = (str, x, y, width = str.length * 5) => ({
     str, width, height: 8, transform: [1, 0, 0, 8, x, y]
@@ -215,12 +281,65 @@ test("PDF de plano asocia divisor, fibra y cable por proximidad a la CTO, no por
   assert.ok(target);
   assert.equal(target.divisor, "DV-27212");
   assert.equal(target.patilla, "2");
-  assert.equal(target.fibra, "1-8");
+  assert.equal(target.fibra, "1");
   assert.equal(target.cable, "A109/232");
   assert.equal(target.empalme, "");
   const record = plain(api.registroPDF(target));
   assert.equal(record.cable, "A109/232");
   assert.match(record.descripcionCable, /8 F\.O\. KT/);
+});
+
+test("PDF usa la línea mapeada de la CTO para obtener fibra y cable, aunque haya rótulos más cercanos", () => {
+  const { api } = loadApp();
+  const item = (str, x, y, width = str.length * 5) => ({
+    str, width, height: 8, transform: [1, 0, 0, 8, x, y]
+  });
+  const page = [
+    item("CTO 22071", 200, 1000, 58),
+    item("DV-27208,3", 205, 990, 58),
+    item("DV-27208,3-4#1-2", 255, 978, 100),
+    item("A109/227 [16 F.O. TKT]", 270, 970, 115),
+    item("DV-27310,1#1", 430, 986, 78),
+    item("A109/225 [8 F.O. KT]", 430, 981, 105),
+    item("CTO 22072", 700, 1000, 58),
+    item("DV-27310,1", 705, 990, 58),
+    item("DV-27310,1#1", 750, 978, 78),
+    item("A109/225 [8 F.O. KT]", 765, 970, 105),
+    item("DV-27208,3-4#1-2", 900, 988, 100),
+    item("A109/227 [16 F.O. TKT]", 900, 980, 115)
+  ];
+  const parsed = plain(api.analizarPDF([page]));
+  const cto22071 = parsed.find(row => row.cto === "22071");
+  const cto22072 = parsed.find(row => row.cto === "22072");
+  assert.ok(cto22071);
+  assert.ok(cto22072);
+  assert.equal(cto22071.divisor, "DV-27208");
+  assert.equal(cto22071.patilla, "3");
+  assert.equal(cto22071.fibra, "1");
+  assert.equal(cto22071.cable, "A109/227");
+  assert.match(cto22071.descripcionCable, /16 F\.O\. TKT/);
+  assert.equal(cto22072.divisor, "DV-27310");
+  assert.equal(cto22072.patilla, "1");
+  assert.equal(cto22072.fibra, "1");
+  assert.equal(cto22072.cable, "A109/225");
+  assert.match(cto22072.descripcionCable, /8 F\.O\. KT/);
+});
+
+test("PDF resuelve cada patilla del rango contra su fibra mapeada", () => {
+  const { api } = loadApp();
+  const item = (str, x, y, width = str.length * 5) => ({
+    str, width, height: 8, transform: [1, 0, 0, 8, x, y]
+  });
+  const page = [
+    item("CTO 22071", 200, 1000, 58),
+    item("DV-27208,4", 205, 990, 58),
+    item("DV-27208,3-4#1-2", 255, 978, 100),
+    item("A109/227 [16 F.O. TKT]", 270, 970, 115)
+  ];
+  const row = plain(api.analizarPDF([page])).find(x => x.cto === "22071");
+  assert.equal(row.patilla, "4");
+  assert.equal(row.fibra, "2");
+  assert.equal(row.cable, "A109/227");
 });
 
 test("extracción manual informa archivo ausente y procesa KML con filtros de CTO", async () => {
