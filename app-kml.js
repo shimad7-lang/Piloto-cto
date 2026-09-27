@@ -133,6 +133,17 @@ evidencia:e.name+" → "+(e.nombreElemento||e.lineasPeticion)
 return dedupEmpalmes(salida);
 }
 
+function empalmeRelacionadoConCTO(empalme,ctos){
+const relEmp=divisorPatilla(empalme);
+if(!relEmp.divisor)return false;
+
+return ctos.some(cto=>{
+const relCTO=divisorPatilla(cto);
+return relCTO.divisor===relEmp.divisor&&
+(!relEmp.patilla||!relCTO.patilla||relCTO.patilla===relEmp.patilla);
+});
+}
+
 function dedupEmpalmes(a){
 const s=new Set();
 return a.filter(x=>{

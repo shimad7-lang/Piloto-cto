@@ -24,7 +24,7 @@ $("estado").textContent="";
 $("estado").className="estado";
 
 $("tabla").innerHTML=
-'<tr><td colspan="17" class="vacia">Todavía no se han realizado búsquedas.</td></tr>';
+'<tr><td colspan="13" class="vacia">Todavía no se han realizado búsquedas.</td></tr>';
 $("recepcionCompartir").hidden = true;
 });
 
@@ -290,6 +290,11 @@ function instalarRecepcionAndroid(){
     if(location.search.includes("shared=1"))
       void iniciarRecuperacionCompartida();
   });
+
+  document.addEventListener?.("visibilitychange",()=>{
+    if(document.visibilityState==="visible"&&location.search.includes("shared=1"))
+      void iniciarRecuperacionCompartida();
+  });
 }
 
 async function iniciarRecuperacionCompartida(){
@@ -300,7 +305,9 @@ async function iniciarRecuperacionCompartida(){
     const url=new URL(location.href);
     const id=url.searchParams.get("id");
     const tieneError=url.searchParams.has("error");
-    const intentos=id&&!tieneError?4:1;
+    // Android puede reanudar la PWA antes de que IndexedDB esté disponible
+    // tras el redirect frío. Mantener el ID y consultar durante unos segundos.
+    const intentos=id&&!tieneError?20:1;
 
     for(let intento=0;intento<intentos;intento++){
       const procesado=await recuperarArchivoCompartido();

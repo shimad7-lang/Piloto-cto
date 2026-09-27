@@ -182,7 +182,7 @@ function loadApp({ pdfjsLib, JSZip, location, launchQueue, indexedDB } = {}) {
   const exported = [
     "limpiarTexto", "normalizar", "lista", "separarCable", "numeroCTO",
     "enlaceMaps", "enlaceBusqueda", "leerKMLKMZ", "analizarKML",
-    "divisorPatilla", "buscarEmpalmes", "dedupEmpalmes", "buscarCables",
+    "divisorPatilla", "buscarEmpalmes", "empalmeRelacionadoConCTO", "dedupEmpalmes", "buscarCables",
     "dedupCables", "leerPDF", "analizarPDF", "registroKML", "registroPDF",
     "claveRegistro", "deduplicarRegistros", "extraer", "pintar", "copiarTexto",
     "campoCSV", "descargarCSV", "procesarArchivoCompartido",

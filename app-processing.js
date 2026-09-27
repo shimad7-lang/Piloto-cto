@@ -1,112 +1,89 @@
 /* ================= PROCESAMIENTO ================= */
 
-function registroKML(cto,datos,filtroEmpalme){
-const rel=divisorPatilla(cto);
-const emps=rel.divisor?
-buscarEmpalmes(datos,cto,rel.divisor,filtroEmpalme):[];
+function registroKML(elemento,datos,filtroEmpalme){
+const tipoRegistro=(datos.empalmes||[]).some(emp=>(emp.id&&emp.id===elemento.id)||
+emp===elemento)?"EMP":"CTO";
+const nombre=elemento.nombreElemento||elemento.name||elemento.id||"Elemento sin nombre";
+const identidad=normalizar([elemento.id,nombre].join(" "));
+const filtro=normalizar(filtroEmpalme);
 
-if(filtroEmpalme&&!emps.length)return[];
+// El filtro de empalme selecciona los propios elementos EMP; no los adjunta
+// como filas secundarias de una CTO.
+if(filtro&&tipoRegistro!=="EMP")return[];
+if(filtro&&!identidad.includes(filtro))return[];
+if(tipoRegistro==="EMP"&&!empalmeRelacionadoConCTO(elemento,datos.ctos||[]))return[];
 
-const cables=buscarCables(datos.cables,cto);
-const ee=emps.length?emps:[{
-valor:"No disponible",
-evidencia:"Empalme no localizado"
+const rel=divisorPatilla(elemento);
+const cables=buscarCables(datos.cables,elemento);
+const fibraElemento=String(elemento.fibIni||elemento.fibFin||"");
+const cablePorFibra=cables.find(c=>
+String(c.fibIni||"")===fibraElemento||String(c.fibFin||"")===fibraElemento
+);
+const cableElegido=cablePorFibra||cables[0]||null;
+const candidatos=cableElegido?[cableElegido]:[{
+cable:"No localizado",descripcionCable:"No disponible",nombreElemento:"",
+longitud:"",distancia:"",evidencia:"Cable no localizado"
 }];
-
-const cc=cables.length?cables:[{
-cable:"No localizado",
-descripcionCable:"No disponible",
-nombreElemento:"",
-longitud:"",
-distancia:"",
-evidencia:"Cable no localizado"
-}];
-
 const salida=[];
 
-for(const e of ee)for(const c of cc){
-const fibra=c.cable!=="No localizado"?(c.fibFin||c.fibIni||""):"";
-const emp=e.e||{};
-const fibraIniEmpalme=emp.fibIni||"";
-const fibraFinEmpalme=emp.fibFin||"";
-const coordenadasEmpalme=emp.lat&&emp.lon?emp.lat+", "+emp.lon:"";
-const datosEmpalme=[
-emp.elementoTipo&&"Tipo: "+emp.elementoTipo,
-emp.nombreLinea&&"Línea: "+emp.nombreLinea,
-emp.lineasPeticion&&"Líneas petición: "+emp.lineasPeticion,
-(fibraIniEmpalme||fibraFinEmpalme)&&"Fibra: "+[fibraIniEmpalme,fibraFinEmpalme].filter(Boolean).join("–"),
-emp.longitud&&"Longitud: "+emp.longitud,
-emp.distancia&&"Distancia: "+emp.distancia,
-emp.orden&&"Orden tramo: "+emp.orden,
-emp.direccion&&"Dirección: "+emp.direccion,
-emp.fechaInstalacion&&"Instalación: "+emp.fechaInstalacion,
-emp.unidadAlta&&"Unidad alta: "+emp.unidadAlta,
-emp.unidadBaja&&"Unidad baja: "+emp.unidadBaja,
-emp.noTe&&"NoTe: "+emp.noTe,
-emp.uuid&&"UUID: "+emp.uuid,
-coordenadasEmpalme&&"Coordenadas: "+coordenadasEmpalme,
-emp.estructuraInicio&&"Estructura inicio: "+emp.estructuraInicio,
-emp.estructuraFinal&&"Estructura final: "+emp.estructuraFinal
-].filter(Boolean).join(" · ");
+for(const cable of candidatos){
+const fibra=cable.cable!=="No localizado"?
+(cable.fibFin||cable.fibIni||""):(elemento.fibFin||elemento.fibIni||"");
 let puntos=0;
-if(cto.id)puntos++;
+if(elemento.id)puntos++;
 if(rel.divisor)puntos++;
 if(rel.patilla)puntos++;
 if(fibra)puntos++;
-if(e.valor!=="No disponible")puntos++;
-if(c.cable!=="No localizado")puntos++;
+if(cable.cable!=="No localizado")puntos++;
 
 salida.push({
-cto:numeroCTO(cto.nombreElemento,cto.id),
-nombreCto:cto.nombreElemento,
-empalme:e.valor,
-idEmpalme:emp.id||"",
-nombreEmpalme:emp.nombreElemento||emp.name||"",
-tipoEmpalme:emp.elementoTipo||"",
-direccionEmpalme:emp.direccion||"",
-fechaInstalacionEmpalme:emp.fechaInstalacion||"",
-lineaEmpalme:emp.nombreLinea||"",
-lineasPeticionEmpalme:emp.lineasPeticion||"",
-fibIniEmpalme:fibraIniEmpalme,
-fibFinEmpalme:fibraFinEmpalme,
-longitudEmpalme:emp.longitud||"",
-distanciaEmpalme:emp.distancia||"",
-ordenEmpalme:emp.orden||"",
-unidadAltaEmpalme:emp.unidadAlta||"",
-unidadBajaEmpalme:emp.unidadBaja||"",
-noTeEmpalme:emp.noTe||"",
-uuidEmpalme:emp.uuid||"",
-latEmpalme:emp.lat||"",
-lonEmpalme:emp.lon||"",
-estructuraInicioEmpalme:emp.estructuraInicio||"",
-estructuraFinalEmpalme:emp.estructuraFinal||"",
-datosEmpalme,
+tipoRegistro,
+idElemento:elemento.id||"",
+elemento:nombre,
+linea:elemento.nombreLinea||"",
+lineasPeticion:elemento.lineasPeticion||"",
+fibIni:elemento.fibIni||"",
+fibFin:elemento.fibFin||"",
+direccion:elemento.direccion||"",
+fechaInstalacion:elemento.fechaInstalacion||"",
+orden:elemento.orden||"",
+unidadAlta:elemento.unidadAlta||"",
+unidadBaja:elemento.unidadBaja||"",
+noTe:elemento.noTe||"",
+uuid:elemento.uuid||"",
+estructuraInicio:elemento.estructuraInicio||"",
+estructuraFinal:elemento.estructuraFinal||"",
+cto:tipoRegistro==="CTO"?numeroCTO(nombre,elemento.id):"",
+nombreCto:tipoRegistro==="CTO"?nombre:"",
+empalme:tipoRegistro==="EMP"?(numeroCTO(nombre,elemento.id)):"",
+idEmpalme:tipoRegistro==="EMP"?(elemento.id||""):"",
+nombreEmpalme:tipoRegistro==="EMP"?nombre:"",
+tipoEmpalme:tipoRegistro==="EMP"?(elemento.elementoTipo||""):"",
+datosEmpalme:"",
 divisor:rel.divisor||"No disponible",
 patilla:rel.patilla||"No disponible",
 fibra:fibra||"No disponible",
-cable:c.cable||"No localizado",
-descripcionCable:c.descripcionCable||"No disponible",
-tipoElemento:c.nombreElemento||cto.elementoTipo,
-longitud:c.longitud||cto.longitud,
-distancia:c.distancia||cto.distancia,
-lat:cto.lat,
-lon:cto.lon,
-ubicacion:cto.lat&&cto.lon?
-"Exacta · coordenadas KML":"Sin coordenadas",
-referencia:cto.lat&&cto.lon?
-cto.lat+", "+cto.lon:"",
-maps:enlaceMaps(cto.lat,cto.lon),
-estado:puntos>=5?"Completa":puntos>=2?"Parcial":"Sin datos",
+cable:cable.cable||"No localizado",
+descripcionCable:cable.descripcionCable||"No disponible",
+tipoElemento:elemento.elementoTipo||tipoRegistro,
+longitud:elemento.longitud||cable.longitud||"",
+distancia:elemento.distancia||cable.distancia||"",
+lat:elemento.lat||"",
+lon:elemento.lon||"",
+ubicacion:elemento.lat&&elemento.lon?"Exacta · coordenadas KML":"Sin coordenadas",
+referencia:elemento.lat&&elemento.lon?elemento.lat+", "+elemento.lon:"",
+maps:enlaceMaps(elemento.lat,elemento.lon),
+estado:puntos>=4?"Completa":puntos>=2?"Parcial":"Sin datos",
 evidencias:[
-"CTO: "+cto.nombreElemento,
+tipoRegistro+": "+nombre,
+"Línea: "+(elemento.nombreLinea||"No disponible"),
+"Líneas petición: "+(elemento.lineasPeticion||"No disponible"),
 "Divisor: "+(rel.divisor||"No localizado"),
 "Patilla: "+(rel.patilla||"No localizada"),
-"Fibra llegada ("+(c.cable||"cable no localizado")+"): "+(fibra||"No disponible"),
-e.evidencia||"",
-c.evidencia||(
-c.nombreElemento+" | "+c.nombreLinea
-)
-]
+"Fibra llegada ("+(cable.cable||"cable no localizado")+"): "+(fibra||"No disponible"),
+cables.length>1?"Aviso: "+cables.length+" cables compatibles; se muestra "+(cable.cable||"el primero")+".":"",
+cable.evidencia||[cable.nombreElemento,cable.nombreLinea].filter(Boolean).join(" | ")
+].filter(Boolean)
 });
 }
 
@@ -160,7 +137,7 @@ evidencias:c.evidencias
 
 function claveRegistro(x){
 return normalizar([
-x.cto,x.empalme,x.divisor,x.patilla,
+x.tipoRegistro,x.idElemento,x.elemento,x.cto,x.empalme,x.divisor,x.patilla,
 x.fibra,x.cable,x.lat,x.lon
 ].join("|"));
 }
@@ -216,25 +193,32 @@ const datos=analizarKML(xml);
 const filtros=lista($("ctos").value);
 const filtroEmpalme=limpiarTexto($("empalme").value);
 
-let ctos=datos.ctos;
+const empalmes=datos.empalmes.filter(empalme=>
+empalmeRelacionadoConCTO(empalme,datos.ctos)
+);
+let elementos=[...datos.ctos,...empalmes];
 
 if(filtros.length){
-ctos=ctos.filter(c=>{
-const n=numeroCTO(c.nombreElemento,c.id);
-return filtros.includes(n)||filtros.includes(c.id);
+elementos=elementos.filter(elemento=>{
+const numero=numeroCTO(elemento.nombreElemento||elemento.name,elemento.id);
+const texto=normalizar([elemento.id,elemento.name,elemento.nombreElemento].join(" "));
+return filtros.some(filtro=>
+filtro===numero||filtro===elemento.id||texto.includes(normalizar(filtro))
+);
 });
 }
 
-for(const c of ctos)
-registros.push(...registroKML(c,datos,filtroEmpalme));
+for(const elemento of elementos)
+registros.push(...registroKML(elemento,datos,filtroEmpalme));
 
 $("diagnostico").innerHTML=
 "Placemark: <b>"+datos.elementos.length+"</b> · "+
 "CTO: <b>"+datos.ctos.length+"</b> · "+
 "Cables: <b>"+datos.cables.length+"</b> · "+
-"Empalmes: <b>"+datos.empalmes.length+"</b> · "+
-"CTO con coordenadas: <b>"+
-datos.ctos.filter(x=>x.lat&&x.lon).length+"</b>";
+"EMP detectados: <b>"+datos.empalmes.length+"</b> · "+
+"EMP asociados a CTO (mismo divisor/patilla): <b>"+empalmes.length+"</b> · "+
+"Elementos con coordenadas: <b>"+
+elementos.filter(x=>x.lat&&x.lon).length+"</b>";
 
 }else if(nombre.endsWith(".pdf")){
 const paginas=await leerPDF(archivo);

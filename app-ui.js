@@ -5,19 +5,21 @@ const tabla=$("tabla");
 
 if(!registros.length){
 tabla.innerHTML=
-'<tr><td colspan="17" class="vacia">No se han encontrado resultados.</td></tr>';
+'<tr><td colspan="13" class="vacia">No se han encontrado resultados.</td></tr>';
 $("resumen").innerHTML="";
 return;
 }
 
 const completas=registros.filter(x=>x.estado==="Completa").length;
 const parciales=registros.filter(x=>x.estado==="Parcial").length;
-const ctos=new Set(registros.map(x=>x.cto)).size;
+const ctos=new Set(registros.filter(x=>x.tipoRegistro!="EMP").map(x=>x.idElemento||x.cto||x.elemento)).size;
+const empalmes=new Set(registros.filter(x=>x.tipoRegistro==="EMP").map(x=>x.idElemento||x.elemento)).size;
 const exactas=registros.filter(x=>x.lat&&x.lon).length;
 const aproximadas=registros.filter(x=>!x.lat&&x.referencia).length;
 
 $("resumen").innerHTML=`
 <div class="indicador"><strong>${ctos}</strong>CTO</div>
+<div class="indicador"><strong>${empalmes}</strong>EMP</div>
 <div class="indicador"><strong>${registros.length}</strong>Resultados</div>
 <div class="indicador"><strong>${completas}</strong>Completos</div>
 <div class="indicador"><strong>${parciales}</strong>Parciales</div>
@@ -35,21 +37,14 @@ const maps=x.maps?
 
 const copiar=x.referencia?
 `<button class="btn-copiar" onclick="copiarTexto(${i})">Copiar</button>`:"";
-const identidadCtoEmp=`
-<div class="entidad-identidad entidad-cto"><strong>CTO</strong><span>${escapar(x.nombreCto||x.cto)}</span></div>
-<div class="entidad-identidad entidad-emp"><strong>EMP</strong><span>${escapar(x.nombreEmpalme||"No disponible")}</span></div>`;
-const datosEmpalme=String(x.datosEmpalme||"").split(" · ").filter(Boolean);
-const datosEmpalmeHtml=datosEmpalme.length?
-`<div class="datos-empalme">${datosEmpalme.map(d=>`<span>${escapar(d)}</span>`).join("")}</div>`:
-"No disponible";
+const identidad=x.elemento||x.nombreCto||x.nombreEmpalme||x.cto||"No disponible";
+const evidencias=x.evidencias?.length?
+`<details class="evidencias"><summary>Ver ${x.evidencias.length} datos</summary>${x.evidencias.map(e=>`<div class="evidencia">${escapar(e)}</div>`).join("")}</details>`:
+"—";
 
 return`
 <tr>
-<td>${escapar(x.cto)}</td>
-<td>${identidadCtoEmp}</td>
-<td>${escapar(x.empalme)}</td>
-<td>${escapar(x.idEmpalme)}</td>
-<td>${datosEmpalmeHtml}</td>
+<td>${escapar(identidad)}</td>
 <td>${escapar(x.divisor)}</td>
 <td>${escapar(x.patilla)}</td>
 <td>${escapar(x.fibra)}</td>
@@ -65,7 +60,7 @@ ${copiar}
 </td>
 <td>${maps}</td>
 <td><span class="badge ${clase}">${escapar(x.estado)}</span></td>
-<td>${x.evidencias.map(e=>`<div class="evidencia">${escapar(e)}</div>`).join("")}</td>
+<td>${evidencias}</td>
 </tr>`;
 }).join("");
 }
@@ -90,22 +85,24 @@ function descargarCSV(){
 if(!registros.length)return;
 
 const cab=[
-"CTO","Nombre CTO","Nº EMP","ID EMP","Nombre EMP","Datos EMP",
-"Tipo EMP","Línea EMP","Líneas petición EMP","Fibra inicial EMP","Fibra final EMP",
-"Longitud EMP","Distancia EMP","Orden tramo EMP","Dirección EMP","Fecha instalación EMP",
-"Unidad alta EMP","Unidad baja EMP","NoTe EMP","UUID EMP","Latitud EMP","Longitud geográfica EMP",
-"Estructura inicio EMP","Estructura final EMP","Divisor","Patilla","Fibra",
+"Elemento CTO / EMP","Tipo elemento","ID elemento","Línea","Líneas petición",
+"Fibra inicial","Fibra final","Dirección","Fecha instalación","Orden tramo",
+"Unidad alta","Unidad baja","NoTe","UUID","Estructura inicio","Estructura final",
+"Divisor","Patilla","Fibra",
 "Cable","Descripción cable","Tipo","Longitud","Distancia",
 "Ubicación","Referencia/Coordenadas","Enlace Maps",
 "Estado","Evidencias"
 ];
 
 const filas=registros.map(x=>[
-x.cto,x.nombreCto,x.empalme,x.idEmpalme,x.nombreEmpalme,x.datosEmpalme,
-x.tipoEmpalme,x.lineaEmpalme,x.lineasPeticionEmpalme,x.fibIniEmpalme,x.fibFinEmpalme,
-x.longitudEmpalme,x.distanciaEmpalme,x.ordenEmpalme,x.direccionEmpalme,x.fechaInstalacionEmpalme,
-x.unidadAltaEmpalme,x.unidadBajaEmpalme,x.noTeEmpalme,x.uuidEmpalme,x.latEmpalme,x.lonEmpalme,
-x.estructuraInicioEmpalme,x.estructuraFinalEmpalme,x.divisor,x.patilla,x.fibra,
+x.elemento||(x.tipoRegistro==="EMP"?x.nombreEmpalme:x.nombreCto)||x.nombreCto||x.nombreEmpalme||x.cto,
+x.tipoRegistro||x.tipoEmpalme||x.tipoElemento,x.idElemento||x.idEmpalme,
+x.linea||x.lineaEmpalme,x.lineasPeticion||x.lineasPeticionEmpalme,
+x.fibIni||x.fibIniEmpalme,x.fibFin||x.fibFinEmpalme,x.direccion||x.direccionEmpalme,
+x.fechaInstalacion||x.fechaInstalacionEmpalme,x.orden||x.ordenEmpalme,
+x.unidadAlta||x.unidadAltaEmpalme,x.unidadBaja||x.unidadBajaEmpalme,x.noTe||x.noTeEmpalme,
+x.uuid||x.uuidEmpalme,x.estructuraInicio||x.estructuraInicioEmpalme,x.estructuraFinal||x.estructuraFinalEmpalme,
+x.divisor,x.patilla,x.fibra,
 x.cable,x.descripcionCable,x.tipoElemento,x.longitud,x.distancia,
 x.ubicacion,x.referencia,x.maps,x.estado,
 x.evidencias.join(" | ")

@@ -1,4 +1,4 @@
-const CACHE_NAME = "piloto-cto-v19-v4-share-first";
+const CACHE_NAME = "piloto-cto-v20-v4-elementos-share-retry";
 
 const ARCHIVOS_APP = [
   "./",

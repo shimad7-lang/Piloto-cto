@@ -34,10 +34,10 @@ test("normalización, listas, cable, CTO y enlaces conservan sus reglas", () => 
   assert.equal(api.enlaceMaps("40.4", "-3.7"), "https://www.google.com/maps/search/?api=1&query=40.4%2C-3.7");
 });
 
-test("KML se clasifica, extrae coordenadas y produce una relación CTO/cable/empalme", () => {
+test("KML resuelve CTO y EMP como filas independientes con identidad compartida", () => {
   const app = loadApp();
   const { api } = app;
-  const datos = plain(api.analizarKML(supportedKml()));
+  const datos = api.analizarKML(supportedKml());
   assert.equal(datos.elementos.length, 3);
   assert.equal(datos.ctos.length, 1);
   assert.equal(datos.cables.length, 1);
@@ -46,44 +46,46 @@ test("KML se clasifica, extrae coordenadas y produce una relación CTO/cable/emp
   assert.equal(datos.ctos[0].lat, "40.4");
   assert.equal(datos.cables[0].cable, "A1/2");
 
-  const filas = plain(api.registroKML(datos.ctos[0], datos, ""));
-  assert.equal(filas.length, 1);
-  assert.equal(filas[0].cto, "123");
-  assert.equal(filas[0].empalme, "5");
-  assert.equal(filas[0].idEmpalme, "splice-1");
-  assert.equal(filas[0].nombreEmpalme, "Empalme N 5 DV-7, 4");
-  assert.equal(filas[0].lineaEmpalme, "Linea 1");
-  assert.equal(filas[0].fibIniEmpalme, "2");
-  assert.equal(filas[0].fibFinEmpalme, "3");
-  assert.equal(filas[0].latEmpalme, "40.3");
-  assert.equal(filas[0].lonEmpalme, "-3.6");
-  assert.match(filas[0].datosEmpalme, /UUID: uuid-emp-5/);
-  assert.notEqual(filas[0].referencia, filas[0].latEmpalme+", "+filas[0].lonEmpalme);
-  assert.equal(filas[0].divisor, "DV-7");
-  assert.equal(filas[0].patilla, "4");
-  assert.equal(filas[0].cable, "A1/2");
-  assert.equal(filas[0].ubicacion, "Exacta · coordenadas KML");
-  assert.equal(filas[0].estado, "Completa");
+  const cto = plain(api.registroKML(datos.ctos[0], datos, ""))[0];
+  const empalme = plain(api.registroKML(datos.empalmes[0], datos, ""))[0];
+  assert.equal(cto.tipoRegistro, "CTO");
+  assert.equal(cto.elemento, "CTO 123");
+  assert.equal(cto.cto, "123");
+  assert.equal(cto.divisor, "DV-7");
+  assert.equal(cto.patilla, "4");
+  assert.equal(cto.cable, "A1/2");
+  assert.equal(cto.lat, "40.4");
+  assert.equal(cto.estado, "Completa");
+  assert.equal(empalme.tipoRegistro, "EMP");
+  assert.equal(empalme.elemento, "Empalme N 5 DV-7, 4");
+  assert.equal(empalme.idElemento, "splice-1");
+  assert.equal(empalme.divisor, "DV-7");
+  assert.equal(empalme.patilla, "4");
+  assert.equal(empalme.fibIni, "2");
+  assert.equal(empalme.fibFin, "3");
+  assert.equal(empalme.lat, "40.3");
+  assert.equal(empalme.lon, "-3.6");
+  assert.equal(empalme.referencia, "40.3, -3.6");
   assert.equal(api.registroKML(datos.ctos[0], datos, "E999").length, 0);
+  assert.equal(api.registroKML(datos.empalmes[0], datos, "E999").length, 0);
+  assert.equal(api.registroKML(datos.empalmes[0], datos, "5").length, 1);
 
-  api.setState({ registros: filas });
+  api.setState({ registros: [cto,empalme] });
   api.pintar();
   assert.match(app.elements.get("tabla").innerHTML, /Empalme N 5/);
-  assert.match(app.elements.get("tabla").innerHTML, /uuid-emp-5/);
-  assert.match(app.elements.get("tabla").innerHTML, /entidad-cto.*CTO 123.*entidad-emp.*Empalme N 5/s);
-  assert.match(app.elements.get("tabla").innerHTML, /datos-empalme.*Fibra: 2–3.*UUID: uuid-emp-5/s);
-  assert.match(fs.readFileSync(path.join(ROOT, "index.html"), "utf8"), /<th>Nombre CTO \/ EMP<\/th>/);
-  assert.match(fs.readFileSync(path.join(ROOT, "index.html"), "utf8"), /flex-wrap:nowrap/);
-  api.setState({registros:[{...filas[0],nombreEmpalme:"E8548 C-E UC 6 BD MFT"}]});
-  api.pintar();
-  const filaVisual=app.elements.get("tabla").innerHTML;
-  assert.match(filaVisual,/entidad-cto.*CTO 123.*entidad-emp.*E8548 C-E UC 6 BD MFT/s);
+  assert.equal((app.elements.get("tabla").innerHTML.match(/<tr>/g)||[]).length,2);
+  assert.match(app.elements.get("tabla").innerHTML, /Evidencias|Ver \d+ datos/);
+  const html=fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  assert.match(html, /<th>Elemento CTO \/ EMP<\/th>/);
+  assert.doesNotMatch(html, /<th>(?:Nº EMP|ID EMP|Datos EMP)<\/th>/);
+  assert.doesNotMatch(html, /datos-empalme|entidad-identidad/);
 });
 
-test("la salida CSV separa identificación, nombre y campos propios del EMP", async () => {
+test("la salida CSV usa columnas compartidas y conserva metadatos del EMP", async () => {
   const { api, links } = loadApp();
   api.setState({ registros: [{
-    cto: "123", nombreCto: "CTO 123", empalme: "5", idEmpalme: "splice-1",
+    tipoRegistro: "EMP", elemento: "Empalme N 5", idElemento: "splice-1",
+    empalme: "5", idEmpalme: "splice-1",
     nombreEmpalme: "Empalme N 5", datosEmpalme: "Fibra: 2–3 · UUID: uuid-emp-5",
     tipoEmpalme: "EQUIPMENT", lineaEmpalme: "Linea 1", lineasPeticionEmpalme: "DV-7,4",
     fibIniEmpalme: "2", fibFinEmpalme: "3", longitudEmpalme: "18 m",
@@ -98,9 +100,40 @@ test("la salida CSV separa identificación, nombre y campos propios del EMP", as
   api.descargarCSV();
   const bytes = new Uint8Array(await links[0].blob.arrayBuffer());
   const text = new TextDecoder().decode(bytes.slice(3));
-  assert.match(text, /"ID EMP";"Nombre EMP";"Datos EMP"/);
-  assert.match(text, /"splice-1";"Empalme N 5";"Fibra: 2–3 · UUID: uuid-emp-5"/);
-  assert.match(text, /"DOWN";"2015-10-21";"4";"3"/);
+  assert.match(text, /"Elemento CTO \/ EMP";"Tipo elemento";"ID elemento"/);
+  assert.match(text, /"Empalme N 5";"EMP";"splice-1"/);
+  assert.match(text, /"DOWN";"2015-10-21";"7";"4";"3"/);
+});
+
+test("KML muestra 18 elementos como 18 filas independientes, sin cruces CTO × EMP", async () => {
+  const placemark=(type,index)=>{
+    const emp=type==="EMP";
+    const id=(emp?"emp-":"cto-")+index;
+    const name=emp?"C_EMP::"+id:"ELFO:CTO::"+id;
+    const elementName=emp?`E8548 C-E UC ${index} BD MFT`:`CTO EXT Nº ${22000+index}`;
+    const divisor=`DV-${300+index}, 1`;
+    return `<Placemark id="${id}"><name>${name}</name><ExtendedData>`+
+      `<Data name="nombreElemento"><value>${elementName}</value></Data>`+
+      `<Data name="elementType"><value>EQUIPMENT</value></Data>`+
+      `<Data name="lineasPeticion"><value>${divisor}</value></Data>`+
+      `<Data name="nombreLinea"><value>DV-${300+index}</value></Data>`+
+      `<Data name="ordenTramo"><value>2</value></Data>`+
+      `<Data name="fibIni"><value>1</value></Data>`+
+      `<Data name="fibFin"><value>1</value></Data>`+
+      `</ExtendedData></Placemark>`;
+  };
+  const xml=`<kml><Document>${Array.from({length:16},(_,i)=>placemark("CTO",i+1)).join("")}`+
+    `${Array.from({length:2},(_,i)=>placemark("EMP",i+1)).join("")}</Document></kml>`;
+  const { api, document }=loadApp();
+  document.getElementById("archivo").files=[{name:"18-elementos.kml",text:async()=>xml}];
+  await api.extraer();
+  assert.match(document.getElementById("estado").textContent,/Resultados: 18/);
+  const rows=api.getState().registros;
+  assert.equal(rows.filter(row=>row.tipoRegistro==="CTO").length,16);
+  assert.equal(rows.filter(row=>row.tipoRegistro==="EMP").length,2);
+  assert.equal(new Set(rows.map(row=>row.idElemento)).size,18);
+  assert.equal(new Set(rows.map(row=>row.elemento)).size,18);
+  assert.match(document.getElementById("tabla").innerHTML,/E8548 C-E UC 1 BD MFT/);
 });
 
 test("CTO 22076 selecciona el cable del tramo anterior cuya fibra coincide", () => {
@@ -378,7 +411,7 @@ test("extracción manual procesa KMZ y PDF a través de la misma interfaz", asyn
   const kmlApp = loadApp({ JSZip });
   kmlApp.document.getElementById("archivo").files = [{ name: "red.kmz", arrayBuffer: async () => new ArrayBuffer(0) }];
   await kmlApp.api.extraer();
-  assert.match(kmlApp.document.getElementById("estado").textContent, /Resultados: 1/);
+  assert.match(kmlApp.document.getElementById("estado").textContent, /Resultados: 2/);
 
   const pdfItems = [
     ["CTO", 1451, 1221, 16], ["22076,EXT-16,1DV", 1470, 1221, 69],
@@ -405,7 +438,7 @@ test("archivo compartido se asigna al selector y se extrae automáticamente; Lim
   await api.procesarArchivoCompartido(sharedFile);
   assert.equal(elements.get("archivoCompartido").textContent, "Recibido: desde-whatsapp.kml");
   assert.match(elements.get("estadoCompartido").textContent, /Extracción terminada/);
-  assert.match(elements.get("estado").textContent, /Resultados: 1/);
+  assert.match(elements.get("estado").textContent, /Resultados: 2/);
   assert.equal(document.getElementById("archivo").files[0], sharedFile);
 
   elements.get("limpiar").listeners.click();
@@ -424,7 +457,7 @@ test("File Handling usa launchQueue y el mismo flujo automático de extracción"
   assert.equal(typeof consumer, "function");
   const file = { name: "desde-android.kml", text: async () => supportedKml() };
   await consumer({ files: [{ getFile: async () => file }] });
-  assert.match(app.document.getElementById("estado").textContent, /Resultados: 1/);
+  assert.match(app.document.getElementById("estado").textContent, /Resultados: 2/);
 });
 
 test("ruta compartida con error no-file presenta diagnóstico sin exponer los valores del POST", async () => {
@@ -483,7 +516,7 @@ test("el primer lanzamiento compartido recupera y extrae sin esperar al evento l
   };
   const app = loadApp({ location, indexedDB });
   await app.api.iniciarRecuperacionCompartida();
-  assert.match(app.document.getElementById("estado").textContent, /Resultados: 1/);
+  assert.match(app.document.getElementById("estado").textContent, /Resultados: 2/);
   assert.match(app.document.getElementById("estadoCompartido").textContent, /Extracción terminada/);
   assert.equal(app.context.history.calls[0][2], "/Piloto-cto/?source=pwa");
   assert.equal(files.has("first-share-1"), false);

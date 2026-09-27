@@ -51,12 +51,11 @@ button:disabled{opacity:.5;cursor:not-allowed}
 table{width:max-content;min-width:100%;border-collapse:collapse;font-size:12px}
 th{padding:9px 7px;color:white;background:var(--oscuro);text-align:left;white-space:nowrap}
 td{padding:8px 7px;border-bottom:1px solid #e1e6ed;vertical-align:top}
-.entidad-identidad{display:flex;align-items:flex-start;gap:7px;min-width:230px;max-width:360px;margin:2px 0 7px}
-.entidad-identidad strong{min-width:32px;color:var(--azul);font-size:10px;letter-spacing:.04em}
-.entidad-identidad span{white-space:normal;overflow-wrap:anywhere}
-.entidad-emp{padding-top:6px;border-top:1px solid var(--borde)}
-.datos-empalme{display:flex;flex-wrap:nowrap;gap:12px;width:max-content;max-width:unset;white-space:nowrap}
-.datos-empalme span{display:inline-block;padding:4px 6px;border-radius:5px;background:#edf2ff}
+table{width:100%;min-width:1080px;table-layout:auto}
+td{max-width:230px;overflow-wrap:anywhere}
+td:first-child{min-width:190px;font-weight:600}
+.evidencias summary{cursor:pointer;color:var(--azul);white-space:nowrap}
+.evidencias[open]{min-width:220px;max-width:300px}
 tr:nth-child(even){background:#f8faff}
 .vacia{padding:25px;color:#68778d;text-align:center}
 .badge{display:inline-block;padding:4px 8px;border-radius:20px;font-size:11px;font-weight:bold}
@@ -92,20 +91,20 @@ pre{max-height:320px;overflow:auto;padding:14px;border-radius:7px;color:#d0d5dd;
 <label for="archivo">Archivo PDF, KML o KMZ</label>
 <input id="archivo" type="file"
 accept=".pdf,.kml,.kmz,application/pdf,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz">
-<span class="ayuda">Puedes dejar CTO y empalme vacíos para analizar todas las CTO.</span>
+<span class="ayuda">Puedes dejar los filtros vacíos para analizar todos los elementos.</span>
 </div>
 
 <div class="formulario" style="margin-top:17px">
 <div class="campo">
-<label for="ctos">CTO</label>
-<input id="ctos" type="text" placeholder="Ejemplo: 44653, 4374">
-<span class="ayuda">Separa varias CTO con comas o espacios.</span>
+<label for="ctos">CTO / EMP</label>
+<input id="ctos" type="text" placeholder="Ejemplo: 22070, E8548">
+<span class="ayuda">Busca cualquier elemento por nombre o ID. Separa varios con comas o espacios.</span>
 </div>
 
 <div class="campo">
 <label for="empalme">Empalme</label>
 <input id="empalme" type="text" placeholder="Ejemplo: E4374 o 4374">
-<span class="ayuda">Opcional. También acepta C-2, C_E, C_EMP o números.</span>
+<span class="ayuda">Opcional. Filtra y muestra los propios elementos EMP que coincidan.</span>
 </div>
 </div>
 
@@ -127,11 +126,7 @@ accept=".pdf,.kml,.kmz,application/pdf,application/vnd.google-earth.kml+xml,appl
 <table>
 <thead>
 <tr>
-<th>CTO</th>
-<th>Nombre CTO / EMP</th>
-<th>Nº EMP</th>
-<th>ID EMP</th>
-<th>Datos EMP</th>
+<th>Elemento CTO / EMP</th>
 <th>Divisor</th>
 <th>Patilla</th>
 <th>Fibra</th>
@@ -147,7 +142,7 @@ accept=".pdf,.kml,.kmz,application/pdf,application/vnd.google-earth.kml+xml,appl
 </tr>
 </thead>
 <tbody id="tabla">
-<tr><td colspan="17" class="vacia">Todavía no se han realizado búsquedas.</td></tr>
+<tr><td colspan="13" class="vacia">Todavía no se han realizado búsquedas.</td></tr>
 </tbody>
 </table>
 </div>
