@@ -12,6 +12,9 @@ test("selección manual conserva PDF, KML y KMZ", () => {
   assert.match(input, /\.pdf/i);
   assert.match(input, /\.kml/i);
   assert.match(input, /\.kmz/i);
+  const earlyServiceWorkerRegistration=html.indexOf('navigator.serviceWorker.register("./sw.js")');
+  const pdfLibrary=html.indexOf('src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js');
+  assert.ok(earlyServiceWorkerRegistration>=0&&earlyServiceWorkerRegistration<pdfLibrary);
   assert.deepEqual([...html.matchAll(/<script\s+src="(\.\/app-[^"]+\.js)"/g)].map(m => m[1]), [
     "./app-core.js", "./app-kml.js", "./app-pdf.js", "./app-processing.js", "./app-ui.js", "./app-share.js"
   ]);
@@ -422,14 +425,6 @@ test("File Handling usa launchQueue y el mismo flujo automático de extracción"
   const file = { name: "desde-android.kml", text: async () => supportedKml() };
   await consumer({ files: [{ getFile: async () => file }] });
   assert.match(app.document.getElementById("estado").textContent, /Resultados: 1/);
-});
-
-test("el Service Worker receptor se registra al inicio, sin esperar al evento load", () => {
-  const llamadas=[];
-  const serviceWorker={register(ruta){llamadas.push(ruta);return Promise.resolve({});}};
-  const app=loadApp({serviceWorker});
-  assert.deepEqual(llamadas,["./sw.js"]);
-  assert.equal(app.events["window:load"],undefined);
 });
 
 test("ruta compartida con error no-file presenta diagnóstico sin exponer los valores del POST", async () => {

@@ -110,7 +110,7 @@ function makeElement(id) {
   };
 }
 
-function loadApp({ pdfjsLib, JSZip, location, launchQueue, indexedDB, serviceWorker } = {}) {
+function loadApp({ pdfjsLib, JSZip, location, launchQueue, indexedDB } = {}) {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   const source = ["app-core.js", "app-kml.js", "app-pdf.js", "app-processing.js", "app-ui.js", "app-share.js"]
     .map(file => fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n");
@@ -155,7 +155,7 @@ function loadApp({ pdfjsLib, JSZip, location, launchQueue, indexedDB, serviceWor
     window,
     location: appLocation,
     history: { calls: [], replaceState(...args) { this.calls.push(args); } },
-    navigator: serviceWorker?{serviceWorker}: {},
+    navigator: {},
     indexedDB,
     URL: AppURL,
     Blob,

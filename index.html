@@ -9,6 +9,12 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <title>Piloto CTO</title>
 
+<script>
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("./sw.js")
+    .catch(e=>console.warn("Service Worker:",e));
+}
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 

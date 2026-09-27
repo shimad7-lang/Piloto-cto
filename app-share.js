@@ -5,14 +5,6 @@ let recuperacionCompartidaEnCurso=null;
 $("extraer").addEventListener("click",extraer);
 $("csv").addEventListener("click",descargarCSV);
 
-// Registra el receptor al ejecutar la app, no después de `window.load`.
-// Así el primer uso desde la PWA no depende de que ya haya terminado la carga
-// de todos los recursos externos antes de que Android envíe el POST.
-if("serviceWorker" in navigator){
-  navigator.serviceWorker.register("./sw.js")
-    .catch(e=>console.warn("Service Worker:",e));
-}
-
 $("limpiar").addEventListener("click",()=>{
 archivoCompartido=null;
 if($("recepcionCompartir")) $("recepcionCompartir").hidden=true;
