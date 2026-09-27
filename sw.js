@@ -1,9 +1,10 @@
-const CACHE_NAME = "piloto-cto-v11-share-fix";
+const CACHE_NAME = "piloto-cto-v14-share-target-post";
 
 const ARCHIVOS_APP = [
   "./",
   "./index.html",
-  "./manifest.webmanifest"
+  "./manifest.webmanifest",
+  "./share-target.html"
 ];
 
 self.addEventListener("install", event => {
@@ -17,10 +18,13 @@ self.addEventListener("install", event => {
 self.addEventListener("fetch", event => {
   const request = event.request;
   const url = new URL(request.url);
+  const rutaShareTarget = new URL("./share-target.html", self.registration.scope).pathname;
+  const rutaShareAnterior = new URL("./", self.registration.scope).pathname;
 
 if (
     request.method === "POST" &&
-    url.pathname === new URL("./", self.registration.scope).pathname
+    url.origin === self.location.origin &&
+    (url.pathname === rutaShareTarget || url.pathname === rutaShareAnterior)
   ) {
     event.respondWith(recibirArchivoCompartido(request));
     return;
@@ -48,33 +52,15 @@ self.addEventListener("activate", event => {
 });
 
 async function recibirArchivoCompartido(request) {
+  let db = null;
+
   try {
     const formData = await request.formData();
-    const resumen = [];
-
-    for (const [nombre, valor] of formData.entries()) {
-      resumen.push(
-        nombre +
-        "=" +
-        (
-          valor &&
-          typeof valor !== "string" &&
-          typeof valor.arrayBuffer === "function"
-            ? "ARCHIVO:" +
-              (valor.name || "(sin nombre)") +
-              ":" +
-              (valor.type || "(sin tipo)") +
-              ":" +
-              (valor.size || 0) +
-              " bytes"
-            : String(valor)
-        )
-      );
-    }
-
+    const diagnostico = diagnosticarRecepcion(request, formData);
+    console.info("Diagnóstico temporal Web Share Target:", diagnostico);
     let archivo = null;
 
-    for (const [nombre, valor] of formData.entries()) {
+    for (const [, valor] of formData.entries()) {
       if (
         valor &&
         typeof valor !== "string" &&
@@ -86,40 +72,58 @@ async function recibirArchivoCompartido(request) {
     }
 
     if (!archivo) {
+      return redirigirRecepcion(
+        "&error=no-file&debug=" + encodeURIComponent(JSON.stringify(diagnostico))
+      );
+    }
 
-  const detalle =
-    "POST recibido. " +
-    "Content-Type: " +
-    (request.headers.get("content-type") || "(ninguno)") +
-    " | Campos: " +
-    (
-      resumen.length
-        ? resumen.join(" ; ")
-        : "(ninguno)"
+    const nombre = String(archivo.name || "").trim();
+    const nombreMinusculas = nombre.toLowerCase();
+    const tipo = String(archivo.type || "").toLowerCase();
+    const formatos = [
+      [".pdf", "application/pdf"],
+      [".kml", "application/vnd.google-earth.kml+xml"],
+      [".kmz", "application/vnd.google-earth.kmz"]
+    ];
+    const extensionReconocida = formatos.find(([extension]) =>
+      nombreMinusculas.endsWith(extension)
     );
+    const formatoPorTipo = formatos.find(([, mime]) => tipo === mime);
 
-  return Response.redirect(
-    "./?shared=1&error=no-file&debug=" +
-    encodeURIComponent(detalle),
-    303
-  );
-}
+    if (!extensionReconocida && !formatoPorTipo) {
+      return redirigirRecepcion("&error=unsupported-file");
+    }
+
+    if (extensionReconocida && formatoPorTipo && extensionReconocida[1] !== formatoPorTipo[1]) {
+      return redirigirRecepcion("&error=unsupported-file");
+    }
+
+    const formato = extensionReconocida || formatoPorTipo;
+    const nombreFinal = nombreMinusculas.endsWith(formato[0])
+      ? nombre
+      : (nombre || "archivo-compartido") + formato[0];
 
     const buffer = await archivo.arrayBuffer();
-    const db = await abrirBaseDatos();
+    db = await abrirBaseDatos();
+    const id = crearIdRecepcion();
 
     await new Promise((resolve, reject) => {
       const transaction = db.transaction("files", "readwrite");
+      const files = transaction.objectStore("files");
 
-      transaction.objectStore("files").put(
+      // Elimina el formato anterior y guarda cada envío con una clave propia,
+      // para que dos recepciones seguidas no se pisen ni recuperen datos viejos.
+      files.delete("latest");
+      files.put(
         {
-          name: archivo.name || "archivo-compartido",
-          type: archivo.type || "application/octet-stream",
+          name: nombreFinal,
+          type: tipo || "application/octet-stream",
           data: buffer,
           size: archivo.size || buffer.byteLength,
-          receivedAt: Date.now()
+          receivedAt: Date.now(),
+          id
         },
-        "latest"
+        id
       );
 
       transaction.oncomplete = resolve;
@@ -128,18 +132,98 @@ async function recibirArchivoCompartido(request) {
         reject(transaction.error || new Error("Transacción abortada"));
     });
 
-    db.close();
-
-    return Response.redirect("./?shared=1", 303);
+    return redirigirRecepcion("&id=" + encodeURIComponent(id));
 
   } catch (error) {
     console.error("Error recibiendo archivo compartido:", error);
 
-    return Response.redirect(
-      "./?shared=1&error=processing",
-      303
-    );
+    return redirigirRecepcion("&error=processing");
+  } finally {
+    if (db) db.close();
   }
+}
+
+function diagnosticarRecepcion(request, formData) {
+  const nombresHeaders = [
+    "content-type",
+    "content-length",
+    "sec-fetch-mode",
+    "sec-fetch-dest",
+    "sec-fetch-site",
+    "user-agent"
+  ];
+  const headers = {};
+
+  for (const nombre of nombresHeaders) {
+    const valor = request.headers.get(nombre);
+    if (valor) {
+      headers[nombre] = nombre === "content-type"
+        ? valor.split(";")[0].trim()
+        : nombre === "user-agent"
+          ? resumirUserAgent(valor)
+          : valor.slice(0, 180);
+    }
+  }
+
+  const partes = [];
+
+  for (const [nombre, valor] of formData.entries()) {
+    if (valor && typeof valor !== "string" && typeof valor.arrayBuffer === "function") {
+      const nombreArchivo = String(valor.name || "");
+      const extension = nombreArchivo.match(/\.(pdf|kml|kmz)$/i);
+
+      partes.push({
+        name: nombre,
+        kind: "file",
+        mime: valor.type || "(vacío)",
+        bytes: Number(valor.size) || 0,
+        filenamePresent: Boolean(nombreArchivo),
+        extension: extension ? "." + extension[1].toLowerCase() : "(sin extensión reconocida)"
+      });
+    } else {
+      const texto = String(valor);
+
+      partes.push({
+        name: nombre,
+        kind: "text",
+        mime: "text/plain",
+        chars: texto.length,
+        containsContentUri: /content:\/\//i.test(texto),
+        containsWebUrl: /https?:\/\//i.test(texto),
+        containsSupportedFilename: /\.(pdf|kml|kmz)(?:\b|$)/i.test(texto)
+      });
+    }
+  }
+
+  return {
+    method: request.method,
+    path: new URL(request.url).pathname,
+    headers,
+    parts: partes
+  };
+}
+
+function resumirUserAgent(userAgent) {
+  const plataforma = /Android/i.test(userAgent) ? "Android" : "otra plataforma";
+  const navegador = userAgent.match(/(?:Chrome|Chromium|EdgA|Firefox)\/[\d.]+/i);
+  const esWebView = /\bwv\b/i.test(userAgent);
+
+  return [plataforma, navegador ? navegador[0] : "navegador no identificado", esWebView ? "WebView" : ""]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function redirigirRecepcion(parametros) {
+  const destino = new URL("./?shared=1" + parametros, self.registration.scope);
+  return Response.redirect(destino.href, 303);
+}
+
+function crearIdRecepcion() {
+  if (self.crypto && typeof self.crypto.randomUUID === "function") {
+    return self.crypto.randomUUID();
+  }
+
+  return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
 }
 
 function abrirBaseDatos() {
