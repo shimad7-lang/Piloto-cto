@@ -1,4 +1,5 @@
-const CACHE_NAME = "piloto-cto-v20-v4-elementos-share-retry";
+const CACHE_PREFIX = "piloto-cto-v5-";
+const CACHE_NAME = "piloto-cto-v5-cable-label";
 
 const ARCHIVOS_APP = [
   "./",
@@ -50,7 +51,7 @@ self.addEventListener("activate", event => {
     caches.keys().then(keys =>
       Promise.all(
         keys
-          .filter(key => key !== CACHE_NAME)
+          .filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
           .map(key => caches.delete(key))
       )
     ).then(() => self.clients.claim())

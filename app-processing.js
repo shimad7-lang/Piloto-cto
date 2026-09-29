@@ -1,6 +1,6 @@
 /* ================= PROCESAMIENTO ================= */
 
-function registroKML(elemento,datos,filtroEmpalme){
+function registroKML(elemento,datos,filtroEmpalme,permitirEMPNoRelacionado=false){
 const tipoRegistro=(datos.empalmes||[]).some(emp=>(emp.id&&emp.id===elemento.id)||
 emp===elemento)?"EMP":"CTO";
 const nombre=elemento.nombreElemento||elemento.name||elemento.id||"Elemento sin nombre";
@@ -11,7 +11,8 @@ const filtro=normalizar(filtroEmpalme);
 // como filas secundarias de una CTO.
 if(filtro&&tipoRegistro!=="EMP")return[];
 if(filtro&&!identidad.includes(filtro))return[];
-if(tipoRegistro==="EMP"&&!empalmeRelacionadoConCTO(elemento,datos.ctos||[]))return[];
+if(tipoRegistro==="EMP"&&!permitirEMPNoRelacionado&&
+!empalmeRelacionadoConCTO(elemento,datos.ctos||[]))return[];
 
 const rel=divisorPatilla(elemento);
 const cables=buscarCables(datos.cables,elemento);
@@ -90,6 +91,61 @@ cable.evidencia||[cable.nombreElemento,cable.nombreLinea].filter(Boolean).join("
 return salida;
 }
 
+function clasificarElementosKMZ(xml,datos){
+const doc=new DOMParser().parseFromString(xml,"text/xml");
+if(doc.getElementsByTagName("parsererror").length)
+throw Error("El KML no tiene un XML válido.");
+
+const placemarks=[...doc.getElementsByTagName("*")]
+.filter(x=>x.localName==="Placemark");
+const ctos=[];
+const cables=[];
+const empalmes=[];
+
+datos.elementos.forEach((elemento,i)=>{
+const placemark=placemarks[i];
+if(!placemark)return;
+
+const nombre=elemento.nombreElemento||elemento.name||"";
+const estilo=primer(placemark,"styleUrl");
+const asignacion=(data(placemark,"Asignacion")||"")
+.replace(/[−–—]/g,"-");
+const longitud=data(placemark,"Longitud");
+const estadoElemento=data(placemark,"Estado");
+const esCTO=(datos.ctos||[]).includes(elemento)||
+/(?:CTO|CtExt)/i.test(estilo)||/^CT(?:O)?[-\s]?\d+\b/i.test(nombre);
+const esEMP=(datos.empalmes||[]).includes(elemento)||
+/Empalme/i.test(estilo)||/^E[-\s]?\d+\b/i.test(nombre);
+const esCable=(datos.cables||[]).includes(elemento)||
+/(?:Fo|Cable)/i.test(estilo)||/\bA\d+\/\d+\b/i.test(nombre);
+
+if(esCTO){
+ctos.push(elemento);
+elemento.elementoTipo="CTO";
+}else if(esEMP){
+empalmes.push(elemento);
+elemento.elementoTipo="EMP";
+}else if(esCable){
+cables.push(elemento);
+elemento.elementoTipo="Cable";
+}
+
+const identidad=nombre.match(/^(?:CTO?[-\s]?\d+|E[-\s]?\d+|O[-\s]?\d+)/i);
+if(identidad)elemento.id=identidad[0];
+if(asignacion)elemento.lineasPeticion=asignacion;
+if(longitud)elemento.longitud=longitud;
+if(estadoElemento)elemento.estadoFuente=estadoElemento;
+
+if(esCable){
+const separado=separarCable(nombre);
+elemento.cable=separado.cable;
+elemento.descripcionCable=separado.descripcion;
+}
+});
+
+return{...datos,ctos,cables,empalmes};
+}
+
 function registroPDF(c){
 return{
 cto:c.cto,
@@ -120,10 +176,11 @@ divisor:c.divisor||"No disponible",
 patilla:c.patilla||"No disponible",
 fibra:c.fibra||"No disponible",
 cable:c.cable||"No disponible",
+etiquetaCable:[c.etiquetaCable,c.longitudCable,c.distanciaCable].filter(Boolean).join("\n"),
 descripcionCable:c.descripcionCable||"PDF sin geometría de cable",
 tipoElemento:"PDF",
-longitud:"",
-distancia:"",
+longitud:c.longitudCable||"",
+distancia:c.distanciaCable||"",
 lat:"",
 lon:"",
 ubicacion:c.referencia?
@@ -189,13 +246,16 @@ const xml=await leerKMLKMZ(archivo);
 textoOriginal=xml;
 $("texto").textContent=xml;
 
-const datos=analizarKML(xml);
+const esKMZ=nombre.endsWith(".kmz");
+const datosKML=analizarKML(xml);
+const datos=esKMZ?clasificarElementosKMZ(xml,datosKML):datosKML;
 const filtros=lista($("ctos").value);
 const filtroEmpalme=limpiarTexto($("empalme").value);
 
-const empalmes=datos.empalmes.filter(empalme=>
+const empalmesRelacionados=datos.empalmes.filter(empalme=>
 empalmeRelacionadoConCTO(empalme,datos.ctos)
 );
+const empalmes=esKMZ?datos.empalmes:empalmesRelacionados;
 let elementos=[...datos.ctos,...empalmes];
 
 if(filtros.length){
@@ -209,14 +269,14 @@ filtro===numero||filtro===elemento.id||texto.includes(normalizar(filtro))
 }
 
 for(const elemento of elementos)
-registros.push(...registroKML(elemento,datos,filtroEmpalme));
+registros.push(...registroKML(elemento,datos,filtroEmpalme,esKMZ));
 
 $("diagnostico").innerHTML=
 "Placemark: <b>"+datos.elementos.length+"</b> · "+
 "CTO: <b>"+datos.ctos.length+"</b> · "+
 "Cables: <b>"+datos.cables.length+"</b> · "+
 "EMP detectados: <b>"+datos.empalmes.length+"</b> · "+
-"EMP asociados a CTO (mismo divisor/patilla): <b>"+empalmes.length+"</b> · "+
+"EMP asociados a CTO (mismo divisor/patilla): <b>"+empalmesRelacionados.length+"</b> · "+
 "Elementos con coordenadas: <b>"+
 elementos.filter(x=>x.lat&&x.lon).length+"</b>";
 

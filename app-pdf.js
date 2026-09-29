@@ -168,6 +168,73 @@ centro:(x0+x1)/2
 return filas;
 }
 
+function expandirRangosPDF(texto){
+const valores=[];
+for(const parte of String(texto||"").matchAll(/\d+(?:\s*-\s*\d+)?/g)){
+const extremos=parte[0].split(/\s*-\s*/).map(Number);
+const inicio=extremos[0],fin=extremos[1]??inicio;
+if(fin-inicio>512)continue;
+for(let n=inicio;n<=fin;n++)valores.push(n);
+}
+return valores;
+}
+
+function formatearRangosPDF(valores){
+const numeros=[...new Set(valores.map(Number).filter(Number.isFinite))].sort((a,b)=>a-b);
+if(!numeros.length)return"";
+const rangos=[];
+let inicio=numeros[0],anterior=inicio;
+for(const numero of numeros.slice(1)){
+if(numero===anterior+1){anterior=numero;continue;}
+rangos.push(inicio===anterior?String(inicio):inicio+"-"+anterior);
+inicio=anterior=numero;
+}
+rangos.push(inicio===anterior?String(inicio):inicio+"-"+anterior);
+return rangos.join("+");
+}
+
+function mapasDeCablePDF(texto){
+const mapas=[];
+const expresion=/\b(DV[-\s]?\d+)\s*[,;]\s*(\d+(?:\s*-\s*\d+)?)\s*#\s*([\d+\s-]+)/gi;
+for(const m of String(texto||"").matchAll(expresion)){
+const patillas=expandirRangosPDF(m[2]);
+const fibras=expandirRangosPDF(m[3]);
+if(!patillas.length||patillas.length!==fibras.length)continue;
+const asignacion=new Map(patillas.map((patilla,i)=>[patilla,fibras[i]]));
+mapas.push({divisor:m[1].replace(/[-\s]/g,"").toUpperCase(),asignacion});
+}
+return mapas;
+}
+
+function bloquesCablePDF(filas,pagina){
+const cabeceras=filas.filter(f=>f.pagina===pagina&&/\bA\s*\d+\s*\/\s*\d+\b/i.test(f.texto));
+return cabeceras
+.map(cabecera=>{
+const detalles=filas.filter(f=>{
+if(f.pagina!==pagina||f===cabecera||f.y>=cabecera.y||cabecera.y-f.y>110||
+!/(?:FM|DV[-\s]?\d+|F\.?O\.?|LONGITUD|DISTANCIA)/i.test(f.texto))return false;
+const cabeceraCercana=cabeceras.filter(h=>h.y>f.y&&h.y-f.y<=110)
+.sort((a,b)=>Math.abs(a.x0-f.x0)-Math.abs(b.x0-f.x0))[0];
+return cabeceraCercana===cabecera&&Math.abs(f.x0-cabecera.x0)<=220;
+})
+.sort((a,b)=>b.y-a.y);
+const lineas=[cabecera,...detalles];
+const cable=(cabecera.texto.match(/\b(A\s*\d+\s*\/\s*\d+)\b/i)||[])[1]?.replace(/\s+/g,"")||"";
+const descripcion=(cabecera.texto.match(/\[\s*([^\]]+)\s*\]/)||[])[1]||"";
+const descripcionVisible=descripcion
+.replace(/(\d)(?=F\.?O\.?)/gi,"$1 ")
+.replace(/(F\.?O\.?)(?=[A-Z])/gi,"$1 ");
+const titulo=cable&&descripcion?cable+" ["+descripcionVisible+"]":cabecera.texto;
+const etiqueta=[titulo,...detalles.map(f=>f.texto)].join("\n");
+return{
+cabecera,etiqueta,cable,descripcion:descripcionVisible,
+mapas:mapasDeCablePDF(etiqueta),
+longitud:(etiqueta.match(/LONGITUD\s*[:=]?\s*([\d.,]+\s*(?:m|metros?))/i)||[])[1]||"",
+distancia:(etiqueta.match(/DISTANCIA\s*[:=]?\s*([\d.,]+\s*(?:m|metros?))/i)||[])[1]||""
+};
+});
+}
+
 function analizarPDFEspacial(paginas){
 const filas=filasPDF(paginas);
 const anclas=filas.map(fila=>({
@@ -181,8 +248,7 @@ const {fila,match}=ancla;
 const cercanas=filas.filter(x=>
 x.pagina===fila.pagina&&
 x!==fila&&
-x.y<fila.y&&
-fila.y-x.y<=70&&
+Math.abs(fila.y-x.y)<=70&&
 Math.abs(x.centro-fila.centro)<=240
 );
 
@@ -190,8 +256,8 @@ function masCercana(regex,limite=70){
 return cercanas
 .filter(x=>fila.y-x.y<=limite&&regex.test(x.texto))
 .sort((a,b)=>{
-const da=fila.y-a.y+Math.abs(a.centro-fila.centro)*0.5;
-const db=fila.y-b.y+Math.abs(b.centro-fila.centro)*0.5;
+const da=Math.abs(fila.y-a.y)+Math.abs(a.centro-fila.centro)*0.5;
+const db=Math.abs(fila.y-b.y)+Math.abs(b.centro-fila.centro)*0.5;
 return da-db;
 })[0];
 }
@@ -221,8 +287,22 @@ return mapa.patillaInicio===mapa.patillaFin?String(mapa.fibraInicio):"";
 const filaDivisor=masCercana(/\bDV[-\s]?\d+/i,35);
 const divisorTexto=filaDivisor?.texto||"";
 const divisorMatch=divisorTexto.match(/(DV[-\s]?\d+)\s*[,;]?\s*(\d+)?/i);
-const divisor=divisorMatch?divisorMatch[1].replace(/\s+/g,"").toUpperCase():"";
-const patilla=divisorMatch?.[2]||"";
+let divisor=divisorMatch?divisorMatch[1].replace(/\s+/g,"").toUpperCase():"";
+let patilla=divisorMatch?.[2]||"";
+
+const rutasCTO=new Map();
+for(const cercana of cercanas){
+const m=cercana.texto.match(/\b(DV[-\s]?\d+)\s*[,;]\s*(\d+(?:\s*-\s*\d+)?)(?=\s*<)/i);
+if(!m)continue;
+const clave=m[1].replace(/[-\s]/g,"").toUpperCase();
+if(!rutasCTO.has(clave))rutasCTO.set(clave,new Set());
+expandirRangosPDF(m[2]).forEach(n=>rutasCTO.get(clave).add(n));
+}
+if(rutasCTO.size){
+const [clave,puertos]=[...rutasCTO.entries()].sort((a,b)=>b[1].size-a[1].size)[0];
+divisor=clave.replace(/^(DV)(\d+)$/,"$1-$2");
+patilla=formatearRangosPDF([...puertos]);
+}
 
 const divisorNormalizado=divisor.replace(/[-\s]/g,"");
 const mapas=cercanas.map(f=>({fila:f,mapa:mapaDivisor(f.texto)}))
@@ -241,18 +321,33 @@ return Math.abs(origen.y-destino.y)+Math.abs(origen.centro-destino.centro)*0.5;
 }
 
 const cablesCercanos=cercanas.filter(x=>/\bA\s*\d+\s*\/\s*\d+\b/i.test(x.texto));
+const bloques=bloquesCablePDF(filas,fila.pagina);
+const divisorObjetivo=divisor.replace(/[-\s]/g,"").toUpperCase();
+const patillasObjetivo=new Set(expandirRangosPDF(patilla));
+const cableCoincidente=rutasCTO.size?bloques.map(bloque=>{
+const mapa=bloque.mapas.find(m=>m.divisor===divisorObjetivo);
+const puertos=[...patillasObjetivo].filter(n=>mapa?.asignacion.has(n));
+return{bloque,puertos,mapa};
+}).filter(x=>x.puertos.length)
+.sort((a,b)=>b.puertos.length-a.puertos.length)[0]:null;
 const filaCable=mapaSeleccionado?
 cablesCercanos.sort((a,b)=>distanciaDesde(mapaSeleccionado.fila,a)-distanciaDesde(mapaSeleccionado.fila,b))[0]:
 masCercana(/\bA\s*\d+\s*\/\s*\d+\b/i,55);
 const cableTexto=filaCable?.texto||"";
-const cable=(cableTexto.match(/\b(A\s*\d+\s*\/\s*\d+)\b/i)||[])[1]
-?.replace(/\s+/g,"")||"";
-const descripcionCable=(cableTexto.match(/\[\s*([^\]]+)\s*\]/)||[])[1]||"";
+const bloqueElegido=cableCoincidente?.bloque||
+bloques.find(b=>b.cabecera===filaCable)||null;
+const textoCableElegido=bloqueElegido?.cabecera.texto||cableTexto;
+const cableEncontrado=(textoCableElegido.match(/\b(A\s*\d+\s*\/\s*\d+)\b/i)||[])[1]||"";
+const cable=bloqueElegido?.cable||cableEncontrado.replace(/\s+/g,"");
+const descripcionCable=bloqueElegido?.descripcion||
+(textoCableElegido.match(/\[\s*([^\]]+)\s*\]/)||[])[1]||"";
 
 const filaFibra=mapaSeleccionado?null:masCercana(/(?:FM|F\.?O\.?)\s*#?\s*\d/i,65);
 const fibraTexto=filaFibra?.texto||"";
 const fibraMatch=fibraTexto.match(/(?:FM|F\.?O\.?)\s*#?\s*(\d+(?:[-+]\d+)*)/i);
-const fibra=mapaSeleccionado?fibraDeMapa(mapaSeleccionado.mapa,patilla):fibraMatch?fibraMatch[1]:"";
+const fibrasCable=cableCoincidente?.puertos.map(n=>cableCoincidente.mapa.asignacion.get(n))||[];
+const fibra=fibrasCable.length?formatearRangosPDF(fibrasCable):
+mapaSeleccionado?fibraDeMapa(mapaSeleccionado.mapa,patilla):fibraMatch?fibraMatch[1]:"";
 
 const filaEmpalme=masCercana(/EMPALME|C[_ ]?EMP|\bE\s*\d+/i,45);
 const empalme=filaEmpalme?.texto||"";
@@ -272,7 +367,10 @@ referencias,
 referencia,
 cable,
 descripcionCable,
-evidencias:[fila.texto,...new Set([divisorTexto,mapaSeleccionado?.fila.texto,cableTexto,fibraTexto,empalme].filter(Boolean))],
+etiquetaCable:bloqueElegido?.etiqueta||textoCableElegido,
+longitudCable:bloqueElegido?.longitud||"",
+distanciaCable:bloqueElegido?.distancia||"",
+evidencias:[fila.texto,...new Set([divisorTexto,mapaSeleccionado?.fila.texto,bloqueElegido?.etiqueta,cableTexto,fibraTexto,empalme].filter(Boolean))],
 maps:enlaceBusqueda([fila.texto,referencia].filter(Boolean).join(" "))
 });
 }

@@ -5,7 +5,7 @@ const tabla=$("tabla");
 
 if(!registros.length){
 tabla.innerHTML=
-'<tr><td colspan="13" class="vacia">No se han encontrado resultados.</td></tr>';
+'<tr><td colspan="9" class="vacia">No se han encontrado resultados.</td></tr>';
 $("resumen").innerHTML="";
 return;
 }
@@ -38,6 +38,9 @@ const maps=x.maps?
 const copiar=x.referencia?
 `<button class="btn-copiar" onclick="copiarTexto(${i})">Copiar</button>`:"";
 const identidad=x.elemento||x.nombreCto||x.nombreEmpalme||x.cto||"No disponible";
+const etiquetaCable=x.etiquetaCable||[
+x.cable,x.descripcionCable,x.tipoElemento,x.longitud,x.distancia
+].filter(v=>v&&v!=="No disponible").join("\n");
 const evidencias=x.evidencias?.length?
 `<details class="evidencias"><summary>Ver ${x.evidencias.length} datos</summary>${x.evidencias.map(e=>`<div class="evidencia">${escapar(e)}</div>`).join("")}</details>`:
 "—";
@@ -48,11 +51,7 @@ return`
 <td>${escapar(x.divisor)}</td>
 <td>${escapar(x.patilla)}</td>
 <td>${escapar(x.fibra)}</td>
-<td>${escapar(x.cable)}</td>
-<td>${escapar(x.descripcionCable)}</td>
-<td>${escapar(x.tipoElemento)}</td>
-<td>${escapar(x.longitud)}</td>
-<td>${escapar(x.distancia)}</td>
+<td class="etiqueta-cable">${escapar(etiquetaCable)}</td>
 <td>
 <div>${escapar(x.ubicacion)}</div>
 <div class="coordenadas">${escapar(x.referencia)}</div>
@@ -89,7 +88,7 @@ const cab=[
 "Fibra inicial","Fibra final","Dirección","Fecha instalación","Orden tramo",
 "Unidad alta","Unidad baja","NoTe","UUID","Estructura inicio","Estructura final",
 "Divisor","Patilla","Fibra",
-"Cable","Descripción cable","Tipo","Longitud","Distancia",
+"Etiqueta cable",
 "Ubicación","Referencia/Coordenadas","Enlace Maps",
 "Estado","Evidencias"
 ];
@@ -103,7 +102,7 @@ x.fechaInstalacion||x.fechaInstalacionEmpalme,x.orden||x.ordenEmpalme,
 x.unidadAlta||x.unidadAltaEmpalme,x.unidadBaja||x.unidadBajaEmpalme,x.noTe||x.noTeEmpalme,
 x.uuid||x.uuidEmpalme,x.estructuraInicio||x.estructuraInicioEmpalme,x.estructuraFinal||x.estructuraFinalEmpalme,
 x.divisor,x.patilla,x.fibra,
-x.cable,x.descripcionCable,x.tipoElemento,x.longitud,x.distancia,
+x.etiquetaCable||[x.cable,x.descripcionCable,x.tipoElemento,x.longitud,x.distancia].filter(v=>v&&v!=="No disponible").join("\n"),
 x.ubicacion,x.referencia,x.maps,x.estado,
 x.evidencias.join(" | ")
 ]);
