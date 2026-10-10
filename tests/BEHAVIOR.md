@@ -15,6 +15,7 @@ Estas pruebas fijan el contrato observable de la versión actual. La extracción
 
 ## Salida e interfaz
 
+- La tabla de resultados y el CSV exponen `Longitud` y `Distancia` como columnas propias situadas justo después de `Etiqueta cable` (recuperadas como en v4). En la tabla, la columna `Etiqueta cable` muestra únicamente `cable` y `descripción` para los registros KML (etiqueta cable limpia), dejando la longitud y la distancia en sus columnas dedicadas.
 - El CSV lleva BOM UTF-8, usa `;`, entrecomilla cada campo y duplica comillas interiores. El nombre actual es `resultados_cto_v2_3.csv`.
 - Las ubicaciones KML generan enlace a coordenadas exactas; referencias PDF generan búsqueda aproximada. La acción de copiar usa coordenadas cuando existen y, si no, la referencia textual.
 - El diagnóstico temporal de recepción muestra método, ruta, cabeceras permitidas, nombres de partes, tipo y metadatos resumidos; no muestra los valores de title/text ni el contenido de archivos.

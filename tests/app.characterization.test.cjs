@@ -424,12 +424,11 @@ test("PDF relaciona la CTO 22069 con la etiqueta A109/224 por divisor y patillas
   assert.match(target.etiquetaCable, /DV-27268/);
   api.setState({ registros: [plain(api.registroPDF(target))] });
   api.pintar();
-  assert.match(html, /<th>Etiqueta cable<\/th>/);
-  assert.doesNotMatch(html, /<th>(?:Longitud|Distancia)<\/th>/);
+  assert.match(html, /<th>Etiqueta cable<\/th>\s*<th>Longitud<\/th>\s*<th>Distancia<\/th>/);
   assert.match(document.getElementById("tabla").innerHTML, /A109\/224 \[64 F\.O\. PKP\]/);
   api.descargarCSV();
   const csv = new TextDecoder().decode(new Uint8Array(await links[0].blob.arrayBuffer()).slice(3));
-  assert.match(csv, /"Etiqueta cable"/);
+  assert.match(csv, /"Etiqueta cable";"Longitud";"Distancia"/);
   assert.match(csv, /A109\/224 \[64 F\.O\. PKP\][\s\S]*DV-27268/);
 });
 
