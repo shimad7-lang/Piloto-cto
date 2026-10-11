@@ -690,8 +690,8 @@ test("modo proyecto: divisor/patilla/fibra desde Asignacion y geometria sin Exte
   assert.equal(datos.proyecto, true);
   assert.equal(datos.ctos.length, 2);
   assert.equal(datos.empalmes.length, 1);
-  assert.equal(datos.cables.length, 5);
-  assert.ok(!datos.cables.some(c => /A9\/6/.test(c.name)));
+  assert.equal(datos.cables.length, 7);
+  assert.ok(!datos.cables.some(c => /A100\/8/.test(c.name)));
 
   document.getElementById("archivo").files = [{ name: "proyecto.kml", text: async () => xml }];
   await api.extraer();
@@ -699,17 +699,25 @@ test("modo proyecto: divisor/patilla/fibra desde Asignacion y geometria sin Exte
   const rows = api.getState().registros;
   assert.ok(rows.length >= 2);
 
-  // O-1 en union: diferencia entrante-saliente por divisor -> DV-9 / 1 / 1.
+  // O-1 en union con dos divisores con diferencia real mas uno identico.
+  // Entrante: DV-9,1-2#1+3 / DV-8,1-2#5+7 / DV-6,1#9
+  // Salientes: DV-9,1#1 / DV-8,1#1 / DV-6,1#9
+  // -> DV-9/2/3 y DV-8/2/7; DV-6 (identico) no aparece.
   const o1 = rows.find(r => r.elemento === "O-1");
   assert.ok(o1, "falta la fila O-1");
   assert.equal(o1.tipoRegistro, "CTO");
-  assert.equal(o1.divisor, "DV-9");
-  assert.equal(o1.patilla, "1");
-  assert.equal(o1.fibra, "1");
-  assert.equal(o1.etiquetaCable, "A9/1, A9/2");
-  assert.equal(o1.descripcionCable, "24 FO");
+  assert.equal(o1.divisor, "DV-9\nDV-8");
+  assert.equal(o1.patilla, "2\n2");
+  assert.equal(o1.fibra, "3\n7");
+  assert.ok(!/DV-6/.test(o1.divisor), "el divisor identico no debe aparecer");
   assert.equal(o1.longitud, "100");
   assert.equal(o1.estado, "Completa");
+
+  // Etiqueta cable: una linea por tramo con calibre y tipo, unidas por salto.
+  assert.equal(o1.etiquetaCable, [
+    "64 FO KP A100/1", "16 FO KP A100/2", "8 FO KP A100/3", "8 FO KP A100/4"
+  ].join("\n"));
+  assert.equal(o1.descripcionCable, "");
 
   // O-2 hoja: un solo tramo con su linea DV tal cual -> DV-9 / 4 / 1.
   const o2 = rows.find(r => r.elemento === "O-2");
@@ -717,6 +725,7 @@ test("modo proyecto: divisor/patilla/fibra desde Asignacion y geometria sin Exte
   assert.equal(o2.divisor, "DV-9");
   assert.equal(o2.patilla, "4");
   assert.equal(o2.fibra, "1");
+  assert.equal(o2.etiquetaCable, "8 FO KP A100/5");
 
   // E-1 en origen: tramo ABA + tramo DV, divisor vacio y Asignacion a evidencias.
   const e1 = rows.find(r => r.elemento === "E-1");

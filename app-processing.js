@@ -227,38 +227,36 @@ const suma=c=>c.asignacion.lineas.reduce((a,l)=>a+l.patillas.reduce((x,y)=>x+y,0
 const entrante=conDV.slice().sort((a,b)=>suma(b)-suma(a))[0];
 const salientes=conDV.filter(c=>c!==entrante);
 
+const ordenDiv=[];
 const porDiv=new Map();
 for(const l of entrante.asignacion.lineas){
-if(!porDiv.has(l.divisor))porDiv.set(l.divisor,{pat:[],fib:[]});
-const d=porDiv.get(l.divisor);
-d.pat.push(...l.patillas);
-d.fib.push(...l.fibras);
+if(!porDiv.has(l.divisor)){porDiv.set(l.divisor,[]);ordenDiv.push(l.divisor);}
+const pares=porDiv.get(l.divisor);
+for(let i=0;i<l.patillas.length;i++)pares.push({pat:l.patillas[i],fib:l.fibras[i]});
+for(let i=l.patillas.length;i<l.fibras.length;i++)fibrasSobrantes.push(l.fibras[i]);
 }
 
 const salSet=new Map();
 for(const c of salientes){
 for(const l of c.asignacion.lineas){
-if(!salSet.has(l.divisor))salSet.set(l.divisor,{pat:new Set(),fib:new Set()});
+if(!salSet.has(l.divisor))salSet.set(l.divisor,new Set());
 const s=salSet.get(l.divisor);
-l.patillas.forEach(p=>s.pat.add(p));
-l.fibras.forEach(f=>s.fib.add(f));
+l.patillas.forEach(p=>s.add(p));
 }
 }
 
 const divs=[],pats=[],fibs=[];
-for(const [dv,d] of porDiv){
-const sal=salSet.get(dv)||{pat:new Set(),fib:new Set()};
-const patCons=d.pat.filter(p=>!sal.pat.has(p));
-const fibCons=d.fib.filter(f=>!sal.fib.has(f));
-const emp=fibCons.slice(0,patCons.length);
-fibrasSobrantes.push(...fibCons.slice(patCons.length));
+for(const dv of ordenDiv){
+const sal=salSet.get(dv)||new Set();
+const cons=porDiv.get(dv).filter(par=>!sal.has(par.pat));
+if(!cons.length)continue;
 divs.push(dv);
-pats.push(rango(patCons));
-fibs.push(emp.join("+"));
+pats.push(rango(cons.map(p=>p.pat)));
+fibs.push(cons.map(p=>p.fib).join("+"));
 }
-divisor=divs.join("\n");
-patilla=pats.join("\n");
-fibra=fibs.join("\n");
+divisor=divs.length?divs.join("\n"):"No disponible";
+patilla=pats.length?pats.join("\n"):"No disponible";
+fibra=fibs.length?fibs.join("\n"):"No disponible";
 if(fibrasSobrantes.length)
 evidenciasAsig.push("Fibras sin patilla asignada: "+
 fibrasSobrantes.map(Number).sort((a,b)=>a-b).join("+"));
@@ -272,10 +270,15 @@ evidenciasAsig.push("Asignación: "+o);
 }
 }
 
-const etiquetaCable=segmentos.map(c=>c.etiqueta).filter(Boolean).join(", ");
+const parsearCalibre=nom=>{
+const m=String(nom||"").match(/^(\d+)\s*([A-Za-z]+)\s*(.*)$/);
+if(!m)return String(nom||"").trim();
+return m[1]+" FO "+m[2].toUpperCase()+(m[3]?" "+m[3]:"");
+};
+const etiquetaCable=segmentos
+.map(c=>parsearCalibre(c.nombreElemento||c.name)).filter(Boolean).join("\n");
 const primero=segmentos[0];
-const fo=primero&&primero.fo?primero.fo:"";
-const descripcionCable=fo?fo+" FO":"No disponible";
+const descripcionCable="";
 const longitud=primero?(valorUtil(primero.longProy)||""):"";
 const estadoTramo=primero&&primero.estadoProy?primero.estadoProy:"";
 
