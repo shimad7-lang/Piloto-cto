@@ -645,23 +645,40 @@ test("modo circuito: KML sin CTOs resuelve empalmes y ruta de la FO por ordenTra
   await api.extraer();
 
   const rows = api.getState().registros;
-  assert.ok(rows.length >= 2, "debe listar los elementos de equipo del circuito");
+
+  // Los 7 elementos de equipo de la cadena (REP_F + 5 C_EMP + TM_FO), en orden.
+  assert.equal(rows.length, 7, "la cadena debe listar los 7 equipos");
+  assert.equal(rows.map(r => Number(r.orden)).join(","), "1,5,7,11,13,15,17");
+  assert.match(rows[0].elemento, /RO 01/);
+  assert.match(rows[1].elemento, /7579/);
+  assert.match(rows[2].elemento, /5423/);
+  assert.match(rows[3].elemento, /20737/);
+  assert.match(rows[4].elemento, /20739/);
+  assert.match(rows[5].elemento, /22534/);
+  assert.match(rows[6].elemento, /PTRO 63/);
+
+  // Los 4 empalmes con "FO" en el nombre siguen siendo equipo, no cable.
+  for (const r of rows) assert.equal(r.tipoRegistro, "EMP");
+
+  // Diagnostico: "Elementos con coordenadas" cuenta los 7 equipos con punto.
+  assert.equal(rows.filter(r => r.lat && r.lon).length, 7);
 
   const fila7579 = rows.find(r => /7579/.test(r.elemento));
   assert.ok(fila7579, "falta la fila del empalme 7579");
-  assert.equal(fila7579.tipoRegistro, "EMP");
   assert.equal(fila7579.fibra, "21->1");
   assert.equal(fila7579.cable, "8 FO CAN, C VIDEO FORTA EITB");
   assert.equal(fila7579.divisor, "No disponible");
   assert.equal(fila7579.patilla, "No disponible");
-  assert.match(fila7579.descripcionCable, /24 FO CAN, A1\/2 -> 8 FO CAN, C VIDEO FORTA EITB/);
   assert.equal(fila7579.longitud, "152");
   assert.equal(fila7579.distancia, "48.7");
+
+  // Etiqueta cable: solo la forma "entrante -> saliente", sin línea suelta.
+  assert.equal(fila7579.etiquetaCable, "24 FO CAN, A1/2 -> 8 FO CAN, C VIDEO FORTA EITB");
 
   // Evidencias: ruta ordenada por ordenTramo más la línea de destino del circuito.
   assert.ok(fila7579.evidencias.some(e => /REP_F RO 01/.test(e)));
   assert.ok(fila7579.evidencias.some(e => /4 24 FO CAN, A1\/2 21 110 m/.test(e)));
-  assert.ok(fila7579.evidencias.some(e => /Circuito DV-997 1 · destino: C_EMP Nº 5423/.test(e)));
+  assert.ok(fila7579.evidencias.some(e => /Circuito DV-997 1 · destino: PTRO 63 ROSETA/.test(e)));
 });
 
 test("modo proyecto: divisor/patilla/fibra desde Asignacion y geometria sin ExtendedData", async () => {

@@ -173,6 +173,7 @@ patilla:"No disponible",
 fibra:fibra,
 cable:cable,
 descripcionCable:descripcionCable,
+etiquetaCable:descripcionCable,
 tipoElemento:elemento.elementoTipo||"Circuito",
 longitud:longitud,
 distancia:distancia,
@@ -517,12 +518,14 @@ if(!cadenas.has(k))cadenas.set(k,[]);
 cadenas.get(k).push(e);
 }
 
+const esEquipo=e=>(datos.empalmes||[]).includes(e)||
+/REP_F|TM_FO/i.test((e.name||"")+" "+(e.nombreElemento||""));
+const tieneOrden=e=>e.orden!==""&&e.orden!=null&&String(e.orden).trim()!==""&&Number.isFinite(Number(e.orden));
 const equipos=[];
 for(const cadena of cadenas.values()){
 cadena.sort((a,b)=>aNum(a.orden)-aNum(b.orden));
-const esCable=e=>(datos.cables||[]).includes(e);
 for(const e of cadena){
-if(!esCable(e))equipos.push({elemento:e,cadena});
+if(esEquipo(e)&&tieneOrden(e))equipos.push({elemento:e,cadena});
 }
 }
 
@@ -561,7 +564,7 @@ $("diagnostico").innerHTML=
 "EMP detectados: <b>"+datos.empalmes.length+"</b> · "+
 "EMP asociados a CTO (mismo divisor/patilla): <b>"+empalmesRelacionados.length+"</b> · "+
 "Elementos con coordenadas: <b>"+
-elementos.filter(x=>x.lat&&x.lon).length+"</b>";
+(modoCircuito?registros.filter(x=>x.lat&&x.lon).length:elementos.filter(x=>x.lat&&x.lon).length)+"</b>";
 
 }else if(nombre.endsWith(".pdf")){
 const paginas=await leerPDF(archivo);
