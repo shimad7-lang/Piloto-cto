@@ -91,6 +91,97 @@ cable.evidencia||[cable.nombreElemento,cable.nombreLinea].filter(Boolean).join("
 return salida;
 }
 
+function registroCircuito(elemento,cadena,datos){
+const nombre=elemento.nombreElemento||elemento.name||elemento.id||"Elemento sin nombre";
+const cables=datos.cables||[];
+const esCable=e=>cables.includes(e);
+const idx=cadena.indexOf(elemento);
+
+const anterior=idx>0?cadena[idx-1]:null;
+const siguiente=idx>=0&&idx<cadena.length-1?cadena[idx+1]:null;
+const tramoEntrante=anterior&&esCable(anterior)?anterior:null;
+const tramoSaliente=siguiente&&esCable(siguiente)?siguiente:null;
+
+const fibEntrante=tramoEntrante?String(tramoEntrante.fibIni||tramoEntrante.fibFin||""):"";
+const fibSaliente=tramoSaliente?String(tramoSaliente.fibIni||tramoSaliente.fibFin||""):"";
+
+let fibra="No disponible";
+if(fibEntrante&&fibSaliente)fibra=fibEntrante+"->"+fibSaliente;
+else if(fibEntrante)fibra=fibEntrante;
+else if(fibSaliente)fibra=fibSaliente;
+
+const nom=e=>e?(e.nombreElemento||e.name||""):"";
+const nombreEntrante=tramoEntrante?nom(tramoEntrante):"";
+const nombreSaliente=tramoSaliente?nom(tramoSaliente):"";
+
+const cable=nombreSaliente||"No disponible";
+const descripcionCable=[nombreEntrante,nombreSaliente]
+.filter(Boolean).join(" -> ")||"No disponible";
+const longitud=tramoSaliente?(valorUtil(tramoSaliente.longitud)||""):"";
+const distancia=elemento.distancia||"";
+
+const linea=elemento.nombreLinea||"";
+const unidad=elemento.unidadAlta||"";
+const ultimo=cadena[cadena.length-1];
+const destino=ultimo?nom(ultimo):"";
+
+const ruta=cadena.map(e=>[
+e.orden||"",nom(e),e.fibIni||"",e.longitud||""
+].filter(v=>v!=="").join(" ")).filter(Boolean);
+
+const evidencias=[
+...ruta,
+"Circuito "+[linea,unidad].filter(Boolean).join(" ")+" · destino: "+(destino||"No disponible")
+];
+
+let puntos=0;
+if(elemento.id)puntos++;
+if(tramoEntrante)puntos++;
+if(tramoSaliente)puntos++;
+if(fibra!=="No disponible")puntos++;
+
+return{
+tipoRegistro:"EMP",
+idElemento:elemento.id||"",
+elemento:nombre,
+linea:linea,
+lineasPeticion:elemento.lineasPeticion||"",
+fibIni:elemento.fibIni||"",
+fibFin:elemento.fibFin||"",
+direccion:elemento.direccion||"",
+fechaInstalacion:elemento.fechaInstalacion||"",
+orden:elemento.orden||"",
+unidadAlta:unidad,
+unidadBaja:elemento.unidadBaja||"",
+noTe:elemento.noTe||"",
+uuid:elemento.uuid||"",
+estructuraInicio:elemento.estructuraInicio||"",
+estructuraFinal:elemento.estructuraFinal||"",
+cto:"",
+nombreCto:"",
+empalme:numeroCTO(nombre,elemento.id),
+idEmpalme:elemento.id||"",
+nombreEmpalme:nombre,
+tipoEmpalme:elemento.elementoTipo||"",
+datosEmpalme:"",
+divisor:"No disponible",
+patilla:"No disponible",
+fibra:fibra,
+cable:cable,
+descripcionCable:descripcionCable,
+tipoElemento:elemento.elementoTipo||"Circuito",
+longitud:longitud,
+distancia:distancia,
+lat:elemento.lat||"",
+lon:elemento.lon||"",
+ubicacion:elemento.lat&&elemento.lon?"Exacta · coordenadas KML":"Sin coordenadas",
+referencia:elemento.lat&&elemento.lon?elemento.lat+", "+elemento.lon:"",
+maps:enlaceMaps(elemento.lat,elemento.lon),
+estado:puntos>=3?"Completa":puntos>=1?"Parcial":"Sin datos",
+evidencias:evidencias
+};
+}
+
 function clasificarElementosKMZ(xml,datos){
 const doc=new DOMParser().parseFromString(xml,"text/xml");
 if(doc.getElementsByTagName("parsererror").length)
@@ -255,8 +346,46 @@ const filtroEmpalme=limpiarTexto($("empalme").value);
 const empalmesRelacionados=datos.empalmes.filter(empalme=>
 empalmeRelacionadoConCTO(empalme,datos.ctos)
 );
+
+// Modo circuito: KML sin CTOs pero con empalmes. Los elementos de equipo
+// (EMP, REP_F, TM_FO) son los protagonistas y la ruta de la FO se sigue por
+// ordenTramo dentro de la misma línea+unidad. Si hay CTOs, comportamiento actual.
+const modoCircuito=!datos.ctos.length&&datos.empalmes.length>0;
+let elementos;
+
+if(modoCircuito){
+const aNum=v=>Number(v)||0;
+const cadenas=new Map();
+
+for(const e of datos.elementos){
+const k=(e.nombreLinea||"")+"|"+(e.unidadAlta||"");
+if(!cadenas.has(k))cadenas.set(k,[]);
+cadenas.get(k).push(e);
+}
+
+const equipos=[];
+for(const cadena of cadenas.values()){
+cadena.sort((a,b)=>aNum(a.orden)-aNum(b.orden));
+const esCable=e=>(datos.cables||[]).includes(e);
+for(const e of cadena){
+if(!esCable(e))equipos.push({elemento:e,cadena});
+}
+}
+
+const filtrados=filtros.length?equipos.filter(({elemento})=>{
+const numero=numeroCTO(elemento.nombreElemento||elemento.name,elemento.id);
+const texto=normalizar([elemento.id,elemento.name,elemento.nombreElemento].join(" "));
+return filtros.some(filtro=>
+filtro===numero||filtro===elemento.id||texto.includes(normalizar(filtro))
+);
+}):equipos;
+
+registros=filtrados.map(({elemento,cadena})=>registroCircuito(elemento,cadena,datos));
+elementos=[];
+}else{
 const empalmes=esKMZ?datos.empalmes:empalmesRelacionados;
-let elementos=[...datos.ctos,...empalmes];
+elementos=[...datos.ctos,...empalmes];
+}
 
 if(filtros.length){
 elementos=elementos.filter(elemento=>{

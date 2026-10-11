@@ -637,3 +637,29 @@ test("diagnóstico de recepción muestra nombres, cabeceras y metadatos sin valo
   assert.match(output, /123 bytes/);
   assert.doesNotMatch(output, /Documento de Hugo|archivo secreto/);
 });
+
+test("modo circuito: KML sin CTOs resuelve empalmes y ruta de la FO por ordenTramo", async () => {
+  const { api, document } = loadApp();
+  const xml = fs.readFileSync(path.join(ROOT, "tests", "circuito.kml"), "utf8");
+  document.getElementById("archivo").files = [{ name: "circuito.kml", text: async () => xml }];
+  await api.extraer();
+
+  const rows = api.getState().registros;
+  assert.ok(rows.length >= 2, "debe listar los elementos de equipo del circuito");
+
+  const fila7579 = rows.find(r => /7579/.test(r.elemento));
+  assert.ok(fila7579, "falta la fila del empalme 7579");
+  assert.equal(fila7579.tipoRegistro, "EMP");
+  assert.equal(fila7579.fibra, "21->1");
+  assert.equal(fila7579.cable, "8 FO CAN, C VIDEO FORTA EITB");
+  assert.equal(fila7579.divisor, "No disponible");
+  assert.equal(fila7579.patilla, "No disponible");
+  assert.match(fila7579.descripcionCable, /24 FO CAN, A1\/2 -> 8 FO CAN, C VIDEO FORTA EITB/);
+  assert.equal(fila7579.longitud, "152");
+  assert.equal(fila7579.distancia, "48.7");
+
+  // Evidencias: ruta ordenada por ordenTramo más la línea de destino del circuito.
+  assert.ok(fila7579.evidencias.some(e => /REP_F RO 01/.test(e)));
+  assert.ok(fila7579.evidencias.some(e => /4 24 FO CAN, A1\/2 21 110 m/.test(e)));
+  assert.ok(fila7579.evidencias.some(e => /Circuito DV-997 1 · destino: C_EMP Nº 5423/.test(e)));
+});
