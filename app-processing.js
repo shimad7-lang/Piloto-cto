@@ -11,10 +11,14 @@ const filtro=normalizar(filtroEmpalme);
 // como filas secundarias de una CTO.
 if(filtro&&tipoRegistro!=="EMP")return[];
 if(filtro&&!identidad.includes(filtro))return[];
-if(tipoRegistro==="EMP"&&!permitirEMPNoRelacionado&&
+if(tipoRegistro==="EMP"&&!permitirEMPNoRelacionado&&!datos.proyecto&&
 !empalmeRelacionadoConCTO(elemento,datos.ctos||[]))return[];
 
 const rel=divisorPatilla(elemento);
+
+if(datos.proyecto&&!rel.divisor&&(tipoRegistro==="CTO"||tipoRegistro==="EMP"))
+return[construirRegistroProyecto(elemento,datos,tipoRegistro)];
+
 const cables=buscarCables(datos.cables,elemento);
 const fibraElemento=String(elemento.fibIni||elemento.fibFin||"");
 const cablePorFibra=cables.find(c=>
@@ -178,6 +182,155 @@ ubicacion:elemento.lat&&elemento.lon?"Exacta · coordenadas KML":"Sin coordenada
 referencia:elemento.lat&&elemento.lon?elemento.lat+", "+elemento.lon:"",
 maps:enlaceMaps(elemento.lat,elemento.lon),
 estado:puntos>=3?"Completa":puntos>=1?"Parcial":"Sin datos",
+evidencias:evidencias
+};
+}
+
+function construirRegistroProyecto(elemento,datos,tipoRegistro){
+const nombre=elemento.nombreElemento||elemento.name||elemento.id||"Elemento sin nombre";
+const cables=datos.cables||[];
+const px=Number(elemento.lon),py=Number(elemento.lat);
+const tol=1e-6;
+const cerca=(a,b)=>Number.isFinite(Number(a))&&Number.isFinite(Number(b))&&
+Math.abs(Number(a)-Number(b))<=tol;
+
+const tocaPunto=c=>{
+const vs=c.vertices||[];
+if(!vs.length)return false;
+const p0=vs[0],p1=vs[vs.length-1];
+return (cerca(p0.lon,px)&&cerca(p0.lat,py))||(cerca(p1.lon,px)&&cerca(p1.lat,py));
+};
+
+const segmentos=cables.filter(tocaPunto);
+const conDV=segmentos.filter(c=>c.asignacion&&c.asignacion.lineas.length);
+
+const rango=a=>{
+if(!a.length)return"";
+const s=[...a].map(Number).sort((x,y)=>x-y);
+let cont=s.length>1;
+for(let i=1;i<s.length;i++)if(s[i]!==s[i-1]+1)cont=false;
+return cont?s[0]+"-"+s[s.length-1]:s.join("+");
+};
+
+let divisor="No disponible",patilla="No disponible",fibra="No disponible";
+const fibrasSobrantes=[];
+const evidenciasAsig=[];
+
+if(segmentos.length===1&&conDV.length===1){
+const lineas=conDV[0].asignacion.lineas;
+divisor=lineas.map(l=>l.divisor).join("\n");
+patilla=lineas.map(l=>rango(l.patillas)).join("\n");
+fibra=lineas.map(l=>l.fibras.join("+")).join("\n");
+}else if(segmentos.length>=2&&conDV.length>=2){
+const suma=c=>c.asignacion.lineas.reduce((a,l)=>a+l.patillas.reduce((x,y)=>x+y,0),0);
+const entrante=conDV.slice().sort((a,b)=>suma(b)-suma(a))[0];
+const salientes=conDV.filter(c=>c!==entrante);
+
+const porDiv=new Map();
+for(const l of entrante.asignacion.lineas){
+if(!porDiv.has(l.divisor))porDiv.set(l.divisor,{pat:[],fib:[]});
+const d=porDiv.get(l.divisor);
+d.pat.push(...l.patillas);
+d.fib.push(...l.fibras);
+}
+
+const salSet=new Map();
+for(const c of salientes){
+for(const l of c.asignacion.lineas){
+if(!salSet.has(l.divisor))salSet.set(l.divisor,{pat:new Set(),fib:new Set()});
+const s=salSet.get(l.divisor);
+l.patillas.forEach(p=>s.pat.add(p));
+l.fibras.forEach(f=>s.fib.add(f));
+}
+}
+
+const divs=[],pats=[],fibs=[];
+for(const [dv,d] of porDiv){
+const sal=salSet.get(dv)||{pat:new Set(),fib:new Set()};
+const patCons=d.pat.filter(p=>!sal.pat.has(p));
+const fibCons=d.fib.filter(f=>!sal.fib.has(f));
+const emp=fibCons.slice(0,patCons.length);
+fibrasSobrantes.push(...fibCons.slice(patCons.length));
+divs.push(dv);
+pats.push(rango(patCons));
+fibs.push(emp.join("+"));
+}
+divisor=divs.join("\n");
+patilla=pats.join("\n");
+fibra=fibs.join("\n");
+if(fibrasSobrantes.length)
+evidenciasAsig.push("Fibras sin patilla asignada: "+
+fibrasSobrantes.map(Number).sort((a,b)=>a-b).join("+"));
+}else{
+for(const c of segmentos){
+if(!c.asignacion)continue;
+for(const l of c.asignacion.lineas)
+evidenciasAsig.push("Asignación "+l.divisor+","+rango(l.patillas)+"#"+l.fibras.join("+"));
+for(const o of c.asignacion.otras)
+evidenciasAsig.push("Asignación: "+o);
+}
+}
+
+const etiquetaCable=segmentos.map(c=>c.etiqueta).filter(Boolean).join(", ");
+const primero=segmentos[0];
+const fo=primero&&primero.fo?primero.fo:"";
+const descripcionCable=fo?fo+" FO":"No disponible";
+const longitud=primero?(valorUtil(primero.longProy)||""):"";
+const estadoTramo=primero&&primero.estadoProy?primero.estadoProy:"";
+
+let puntos=0;
+if(elemento.id)puntos++;
+if(divisor!=="No disponible")puntos++;
+if(patilla!=="No disponible")puntos++;
+if(fibra!=="No disponible")puntos++;
+if(etiquetaCable)puntos++;
+
+const evidencias=[
+tipoRegistro+": "+nombre,
+...evidenciasAsig,
+etiquetaCable?"Etiqueta cable: "+etiquetaCable:"",
+estadoTramo?"Estado tramo: "+estadoTramo:""
+].filter(Boolean);
+
+return{
+tipoRegistro,
+idElemento:elemento.id||"",
+elemento:nombre,
+linea:elemento.nombreLinea||"",
+lineasPeticion:elemento.lineasPeticion||"",
+fibIni:elemento.fibIni||"",
+fibFin:elemento.fibFin||"",
+direccion:elemento.direccion||"",
+fechaInstalacion:elemento.fechaInstalacion||"",
+orden:elemento.orden||"",
+unidadAlta:elemento.unidadAlta||"",
+unidadBaja:elemento.unidadBaja||"",
+noTe:elemento.noTe||"",
+uuid:elemento.uuid||"",
+estructuraInicio:elemento.estructuraInicio||"",
+estructuraFinal:elemento.estructuraFinal||"",
+cto:tipoRegistro==="CTO"?numeroCTO(nombre,elemento.id):"",
+nombreCto:tipoRegistro==="CTO"?nombre:"",
+empalme:tipoRegistro==="EMP"?(numeroCTO(nombre,elemento.id)):"",
+idEmpalme:tipoRegistro==="EMP"?(elemento.id||""):"",
+nombreEmpalme:tipoRegistro==="EMP"?nombre:"",
+tipoEmpalme:tipoRegistro==="EMP"?(elemento.elementoTipo||""):"",
+datosEmpalme:"",
+divisor:divisor,
+patilla:patilla,
+fibra:fibra,
+etiquetaCable:etiquetaCable,
+cable:etiquetaCable||"No localizado",
+descripcionCable:descripcionCable,
+tipoElemento:elemento.elementoTipo||tipoRegistro,
+longitud:longitud,
+distancia:elemento.distancia||"",
+lat:elemento.lat||"",
+lon:elemento.lon||"",
+ubicacion:elemento.lat&&elemento.lon?"Exacta · coordenadas KML":"Sin coordenadas",
+referencia:elemento.lat&&elemento.lon?elemento.lat+", "+elemento.lon:"",
+maps:enlaceMaps(elemento.lat,elemento.lon),
+estado:puntos>=4?"Completa":puntos>=2?"Parcial":"Sin datos",
 evidencias:evidencias
 };
 }
@@ -350,7 +503,8 @@ empalmeRelacionadoConCTO(empalme,datos.ctos)
 // Modo circuito: KML sin CTOs pero con empalmes. Los elementos de equipo
 // (EMP, REP_F, TM_FO) son los protagonistas y la ruta de la FO se sigue por
 // ordenTramo dentro de la misma línea+unidad. Si hay CTOs, comportamiento actual.
-const modoCircuito=!datos.ctos.length&&datos.empalmes.length>0;
+// El modo proyecto (XML2KMZ con estilos) tiene prioridad sobre el circuito.
+const modoCircuito=!datos.proyecto&&!datos.ctos.length&&datos.empalmes.length>0;
 let elementos;
 
 if(modoCircuito){
@@ -383,7 +537,7 @@ filtro===numero||filtro===elemento.id||texto.includes(normalizar(filtro))
 registros=filtrados.map(({elemento,cadena})=>registroCircuito(elemento,cadena,datos));
 elementos=[];
 }else{
-const empalmes=esKMZ?datos.empalmes:empalmesRelacionados;
+const empalmes=(esKMZ||datos.proyecto)?datos.empalmes:empalmesRelacionados;
 elementos=[...datos.ctos,...empalmes];
 }
 

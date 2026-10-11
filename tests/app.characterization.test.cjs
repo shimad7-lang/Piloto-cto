@@ -663,3 +663,49 @@ test("modo circuito: KML sin CTOs resuelve empalmes y ruta de la FO por ordenTra
   assert.ok(fila7579.evidencias.some(e => /4 24 FO CAN, A1\/2 21 110 m/.test(e)));
   assert.ok(fila7579.evidencias.some(e => /Circuito DV-997 1 · destino: C_EMP Nº 5423/.test(e)));
 });
+
+test("modo proyecto: divisor/patilla/fibra desde Asignacion y geometria sin ExtendedData", async () => {
+  const { api, document } = loadApp();
+  const xml = fs.readFileSync(path.join(ROOT, "tests", "proyecto.kml"), "utf8");
+
+  // Clasificacion: detecta proyecto y excluye el rotulo #IconTextFo de cables.
+  const datos = api.analizarKML(xml);
+  assert.equal(datos.proyecto, true);
+  assert.equal(datos.ctos.length, 2);
+  assert.equal(datos.empalmes.length, 1);
+  assert.equal(datos.cables.length, 5);
+  assert.ok(!datos.cables.some(c => /A9\/6/.test(c.name)));
+
+  document.getElementById("archivo").files = [{ name: "proyecto.kml", text: async () => xml }];
+  await api.extraer();
+
+  const rows = api.getState().registros;
+  assert.ok(rows.length >= 2);
+
+  // O-1 en union: diferencia entrante-saliente por divisor -> DV-9 / 1 / 1.
+  const o1 = rows.find(r => r.elemento === "O-1");
+  assert.ok(o1, "falta la fila O-1");
+  assert.equal(o1.tipoRegistro, "CTO");
+  assert.equal(o1.divisor, "DV-9");
+  assert.equal(o1.patilla, "1");
+  assert.equal(o1.fibra, "1");
+  assert.equal(o1.etiquetaCable, "A9/1, A9/2");
+  assert.equal(o1.descripcionCable, "24 FO");
+  assert.equal(o1.longitud, "100");
+  assert.equal(o1.estado, "Completa");
+
+  // O-2 hoja: un solo tramo con su linea DV tal cual -> DV-9 / 4 / 1.
+  const o2 = rows.find(r => r.elemento === "O-2");
+  assert.ok(o2, "falta la fila O-2");
+  assert.equal(o2.divisor, "DV-9");
+  assert.equal(o2.patilla, "4");
+  assert.equal(o2.fibra, "1");
+
+  // E-1 en origen: tramo ABA + tramo DV, divisor vacio y Asignacion a evidencias.
+  const e1 = rows.find(r => r.elemento === "E-1");
+  assert.ok(e1, "falta la fila E-1");
+  assert.equal(e1.tipoRegistro, "EMP");
+  assert.equal(e1.divisor, "No disponible");
+  assert.ok(e1.evidencias.some(e => /ABA\./.test(e)));
+  assert.ok(e1.evidencias.some(e => /DV-9,5#9/.test(e)));
+});
