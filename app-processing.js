@@ -225,7 +225,8 @@ fibra=lineas.map(l=>l.fibras.join("+")).join("\n");
 }else if(segmentos.length>=2&&conDV.length>=2){
 const suma=c=>c.asignacion.lineas.reduce((a,l)=>a+l.patillas.reduce((x,y)=>x+y,0),0);
 const entrante=conDV.slice().sort((a,b)=>suma(b)-suma(a))[0];
-const salientes=conDV.filter(c=>c!==entrante);
+const salientes=conDV.filter(c=>c!==entrante);console.log("[DIAG]",nombre,{entrante:(entrante&&(entrante.nombreElemento||entrante.name)),segs:conDV.map(c=>({n:(c.nombreElemento||c.name),dv:(c.asignacion&&c.asignacion.lineas||[]).map(l=>l.divisor+":"+l.patillas.join(",")+"#"+l.fibras.join(","))}))});
+
 
 const ordenDiv=[];
 const porDiv=new Map();
