@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "piloto-cto-v5-";
-const CACHE_NAME = "piloto-cto-v5-cable-label";
+const CACHE_NAME = "piloto-cto-v6-release";
 
 const ARCHIVOS_APP = [
   "./",
