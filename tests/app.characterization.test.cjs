@@ -368,6 +368,70 @@ test("PDF usa la línea mapeada de la CTO para obtener fibra y cable, aunque hay
   assert.match(cto22072.descripcionCable, /8 F\.O\. KT/);
 });
 
+test("PDF CERT PL-4 H1 encuentra el cable y la fibra situados encima de la CTO", () => {
+  const { api } = loadApp();
+  const item = (str, x, y, width = str.length * 5) => ({
+    str, width, height: 8, transform: [1, 0, 0, 8, x, y]
+  });
+  // Posiciones extraídas de CERT PL-4 H1.pdf: las etiquetas A109/225 y
+  // 8FM#1-8 están por encima de CTO 22069 en la página del plano.
+  const page = [
+    item("A109/225 [8 F.O. KT]", 1080, 592, 90),
+    item("8FM#1-8", 1106, 581, 38),
+    item("CTO", 946, 570, 16),
+    item("22069,EXT-16,2DV", 969, 570, 69),
+    item("DV-27208,1<16DV-27215>1-16", 931, 559, 108),
+    item("DV-27208,2<16DV-27216>", 941, 547, 90)
+  ];
+
+  const target = plain(api.analizarPDF([page])).find(row => row.cto === "22069");
+  assert.ok(target);
+  assert.equal(target.fibra, "1-8");
+  assert.equal(target.cable, "A109/225");
+});
+
+test("PDF relaciona la CTO 22069 con la etiqueta A109/224 por divisor y patillas", async () => {
+  const { api, document, html, links } = loadApp();
+  const item = (str, x, y, width = str.length * 5) => ({
+    str, width, height: 8, transform: [1, 0, 0, 8, x, y]
+  });
+  const page = [
+    item("A109/224 [64 F.O. PKP]", 658, 526, 115),
+    item("(64FM#1-64)", 682, 515, 65),
+    item("DV-27208,1-4#1-2+5-6", 662, 505, 115),
+    item("DV-27209,1-4#9+13+17+21", 652, 495, 140),
+    item("DV-27210,1-4#25+29+33+37", 649, 485, 145),
+    item("DV-27212,1-4#41+49+53+57", 649, 475, 145),
+    item("DV-27268,1#61+47FM#3-4+7-8+10-64", 676, 465, 190),
+    item("A109/225 [8 F.O. KT]", 1080, 592, 100),
+    item("8FM#1-8", 1106, 581, 40),
+    item("CTO", 946, 570, 16),
+    item("22069,EXT-16,2DV", 969, 570, 69),
+    item("DV-27208,1<16DV-27215>1-16", 931, 559, 108),
+    item("DV-27208,2<16DV-27216>", 941, 547, 90),
+    item("A109/226 [64 F.O. PKP]", 646, 239, 115),
+    item("DV-27208,3-4#5-6", 661, 216, 100)
+  ];
+
+  const target = plain(api.analizarPDF([page])).find(row => row.cto === "22069");
+  assert.ok(target);
+  assert.equal(target.divisor, "DV-27208");
+  assert.equal(target.patilla, "1-2");
+  assert.equal(target.fibra, "1-2");
+  assert.equal(target.cable, "A109/224");
+  assert.match(target.etiquetaCable, /A109\/224 \[64 F\.O\. PKP\]/);
+  assert.match(target.etiquetaCable, /64FM#1-64/);
+  assert.match(target.etiquetaCable, /DV-27268/);
+  api.setState({ registros: [plain(api.registroPDF(target))] });
+  api.pintar();
+  assert.match(html, /<th>Etiqueta cable<\/th>\s*<th>Longitud<\/th>\s*<th>Distancia<\/th>/);
+  assert.match(document.getElementById("tabla").innerHTML, /A109\/224 \[64 F\.O\. PKP\]/);
+  api.descargarCSV();
+  const csv = new TextDecoder().decode(new Uint8Array(await links[0].blob.arrayBuffer()).slice(3));
+  assert.match(csv, /"Etiqueta cable";"Longitud";"Distancia"/);
+  assert.match(csv, /A109\/224 \[64 F\.O\. PKP\][\s\S]*DV-27268/);
+});
+
 test("PDF resuelve cada patilla del rango contra su fibra mapeada", () => {
   const { api } = loadApp();
   const item = (str, x, y, width = str.length * 5) => ({
@@ -430,6 +494,32 @@ test("extracción manual procesa KMZ y PDF a través de la misma interfaz", asyn
   assert.match(pdfApp.document.getElementById("tabla").innerHTML, /22076/);
   assert.match(pdfApp.document.getElementById("tabla").innerHTML, /A109\/232/);
   assert.match(pdfApp.document.getElementById("tabla").innerHTML, /DV-27212/);
+});
+
+test("KMZ compartido reconoce CTO, EMP y cables por nombre y estilo de capa", async () => {
+  const xml = `<kml><Document>
+    <Placemark><name>CT-182 16P</name><styleUrl>#IconCtExtIPL</styleUrl><Point><coordinates>-3.0211733,43.2219647,0</coordinates></Point></Placemark>
+    <Placemark><name>8KP A101/368</name><styleUrl>#IconFoAreaIPL</styleUrl><ExtendedData>
+      <Data name="Asignacion"><value>DV−57306,5#1&#10;7FM#2−8</value></Data>
+      <Data name="Longitud"><value>700 metros</value></Data>
+      <Data name="Estado"><value>En servicio</value></Data>
+    </ExtendedData><LineString><coordinates>-3.0205428,43.2208567 -3.0203784,43.2204974</coordinates></LineString></Placemark>
+    <Placemark><name>E-23335 MINICAU</name><styleUrl>#IconEmpalmeFoPDA</styleUrl><Point><coordinates>-3.0207345,43.221061,0</coordinates></Point></Placemark>
+  </Document></kml>`;
+  const JSZip = { async loadAsync() { return { files: {
+    "doc.kml": { async: async () => xml }
+  } }; } };
+  const app = loadApp({ JSZip });
+  app.document.getElementById("archivo").files = [{ name: "73523257.kmz", arrayBuffer: async () => new ArrayBuffer(0) }];
+
+  await app.api.extraer();
+
+  const rows = plain(app.api.getState().registros);
+  assert.match(app.document.getElementById("estado").textContent, /Resultados: 2/);
+  assert.match(app.document.getElementById("diagnostico").innerHTML, /EMP asociados a CTO \(mismo divisor\/patilla\): <b>0<\/b>/);
+  assert.deepEqual(rows.map(row => row.tipoRegistro).sort(), ["CTO", "EMP"]);
+  assert.equal(rows.find(row => row.tipoRegistro === "CTO").elemento, "CT-182 16P");
+  assert.equal(rows.find(row => row.tipoRegistro === "EMP").elemento, "E-23335 MINICAU");
 });
 
 test("archivo compartido se asigna al selector y se extrae automáticamente; Limpiar restablece la vista", async () => {
@@ -546,4 +636,102 @@ test("diagnóstico de recepción muestra nombres, cabeceras y metadatos sin valo
   assert.match(output, /application\/pdf/);
   assert.match(output, /123 bytes/);
   assert.doesNotMatch(output, /Documento de Hugo|archivo secreto/);
+});
+
+test("modo circuito: KML sin CTOs resuelve empalmes y ruta de la FO por ordenTramo", async () => {
+  const { api, document } = loadApp();
+  const xml = fs.readFileSync(path.join(ROOT, "tests", "circuito.kml"), "utf8");
+  document.getElementById("archivo").files = [{ name: "circuito.kml", text: async () => xml }];
+  await api.extraer();
+
+  const rows = api.getState().registros;
+
+  // Los 7 elementos de equipo de la cadena (REP_F + 5 C_EMP + TM_FO), en orden.
+  assert.equal(rows.length, 7, "la cadena debe listar los 7 equipos");
+  assert.equal(rows.map(r => Number(r.orden)).join(","), "1,5,7,11,13,15,17");
+  assert.match(rows[0].elemento, /RO 01/);
+  assert.match(rows[1].elemento, /7579/);
+  assert.match(rows[2].elemento, /5423/);
+  assert.match(rows[3].elemento, /20737/);
+  assert.match(rows[4].elemento, /20739/);
+  assert.match(rows[5].elemento, /22534/);
+  assert.match(rows[6].elemento, /PTRO 63/);
+
+  // Los 4 empalmes con "FO" en el nombre siguen siendo equipo, no cable.
+  for (const r of rows) assert.equal(r.tipoRegistro, "EMP");
+
+  // Diagnostico: "Elementos con coordenadas" cuenta los 7 equipos con punto.
+  assert.equal(rows.filter(r => r.lat && r.lon).length, 7);
+
+  const fila7579 = rows.find(r => /7579/.test(r.elemento));
+  assert.ok(fila7579, "falta la fila del empalme 7579");
+  assert.equal(fila7579.fibra, "21->1");
+  assert.equal(fila7579.cable, "8 FO CAN, C VIDEO FORTA EITB");
+  assert.equal(fila7579.divisor, "No disponible");
+  assert.equal(fila7579.patilla, "No disponible");
+  assert.equal(fila7579.longitud, "152");
+  assert.equal(fila7579.distancia, "48.7");
+
+  // Etiqueta cable: solo la forma "entrante -> saliente", sin línea suelta.
+  assert.equal(fila7579.etiquetaCable, "24 FO CAN, A1/2 -> 8 FO CAN, C VIDEO FORTA EITB");
+
+  // Evidencias: ruta ordenada por ordenTramo más la línea de destino del circuito.
+  assert.ok(fila7579.evidencias.some(e => /REP_F RO 01/.test(e)));
+  assert.ok(fila7579.evidencias.some(e => /4 24 FO CAN, A1\/2 21 110 m/.test(e)));
+  assert.ok(fila7579.evidencias.some(e => /Circuito DV-997 1 · destino: PTRO 63 ROSETA/.test(e)));
+});
+
+test("modo proyecto: divisor/patilla/fibra desde Asignacion y geometria sin ExtendedData", async () => {
+  const { api, document } = loadApp();
+  const xml = fs.readFileSync(path.join(ROOT, "tests", "proyecto.kml"), "utf8");
+
+  // Clasificacion: detecta proyecto y excluye el rotulo #IconTextFo de cables.
+  const datos = api.analizarKML(xml);
+  assert.equal(datos.proyecto, true);
+  assert.equal(datos.ctos.length, 2);
+  assert.equal(datos.empalmes.length, 1);
+  assert.equal(datos.cables.length, 7);
+  assert.ok(!datos.cables.some(c => /A100\/8/.test(c.name)));
+
+  document.getElementById("archivo").files = [{ name: "proyecto.kml", text: async () => xml }];
+  await api.extraer();
+
+  const rows = api.getState().registros;
+  assert.ok(rows.length >= 2);
+
+  // O-1 en union con dos divisores con diferencia real mas uno identico.
+  // Entrante: DV-9,1-2#1+3 / DV-8,1-2#5+7 / DV-6,1#9
+  // Salientes: DV-9,1#1 / DV-8,1#1 / DV-6,1#9
+  // -> DV-9/2/3 y DV-8/2/7; DV-6 (identico) no aparece.
+  const o1 = rows.find(r => r.elemento === "O-1");
+  assert.ok(o1, "falta la fila O-1");
+  assert.equal(o1.tipoRegistro, "CTO");
+  assert.equal(o1.divisor, "DV-9\nDV-8");
+  assert.equal(o1.patilla, "2\n2");
+  assert.equal(o1.fibra, "3\n7");
+  assert.ok(!/DV-6/.test(o1.divisor), "el divisor identico no debe aparecer");
+  assert.equal(o1.longitud, "100");
+  assert.equal(o1.estado, "Completa");
+
+  // Etiqueta cable: una linea por tramo con calibre y tipo, unidas por salto.
+  assert.equal(o1.etiquetaCable, [
+    "64 FO KP A100/1", "16 FO KP A100/2", "8 FO KP A100/3", "8 FO KP A100/4"
+  ].join("\n"));
+  assert.equal(o1.descripcionCable, "");
+
+  // O-2 hoja: un solo tramo con su linea DV tal cual -> DV-9 / 4 / 1.
+  const o2 = rows.find(r => r.elemento === "O-2");
+  assert.ok(o2, "falta la fila O-2");
+  assert.equal(o2.divisor, "DV-9");
+  assert.equal(o2.patilla, "4");
+  assert.equal(o2.fibra, "1");
+  assert.equal(o2.etiquetaCable, "8 FO KP A100/5");
+
+  // E-1 en origen: tramo ABA + tramo DV, divisor vacio y Asignacion a evidencias.
+  const e1 = rows.find(r => r.elemento === "E-1");
+  assert.ok(e1, "falta la fila E-1");
+  assert.equal(e1.tipoRegistro, "EMP");
+  assert.equal(e1.divisor, "No disponible");
+  assert.ok(e1.evidencias.some(e => /ABA\./.test(e)));
+  assert.ok(e1.evidencias.some(e => /DV-9,5#9/.test(e)));
 });

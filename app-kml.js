@@ -40,6 +40,12 @@ lon=c[0]||"";
 lat=c[1]||"";
 }
 
+const vertices=coordenadas?coordenadas.trim().split(/\s+/).filter(Boolean).map(v=>{
+const c=v.split(",");
+return{lon:c[0],lat:c[1]};
+}):[];
+const esLinea=[...p.getElementsByTagName("*")].some(x=>x.localName==="LineString");
+
 return{
 id,name,nombreElemento:ne,
 elementoTipo:data(p,"elementType"),
@@ -60,10 +66,43 @@ unidadBaja:data(p,"unidadBaja"),
 uuid:data(p,"uuid"),
 coordenadas,
 lat,lon,
+styleUrl:primer(p,"styleUrl"),
+esLinea,
+vertices,
+asignacionRaw:dataCrudo(p,"Asignacion"),
+longProy:data(p,"Longitud"),
+estadoProy:data(p,"Estado"),
+situacionProy:data(p,"Situación")||data(p,"Situacion"),
 cable:cable.cable,
 descripcionCable:cable.descripcion
 };
 });
+
+const esProyecto=elementos.some(x=>
+/IconCto|IconEmpalmeFo|IconFo/i.test(x.styleUrl||"")||
+/^O-\d+/i.test(x.name||"")||
+/^E-\d+/i.test(x.name||"")
+);
+
+if(esProyecto){
+const ctos=elementos.filter(x=>
+/IconCto/i.test(x.styleUrl||"")||/^O-\d+/i.test(x.name||""));
+const empalmes=elementos.filter(x=>
+/IconEmpalmeFo/i.test(x.styleUrl||"")||/^E-\d+/i.test(x.name||""));
+const cables=elementos.filter(x=>
+/IconFo/i.test(x.styleUrl||"")&&!/IconTextFo/i.test(x.styleUrl||"")&&x.esLinea);
+
+for(const c of cables){
+const nom=c.name||c.nombreElemento||"";
+const m=nom.match(/A\d+\/\d+/);
+c.etiqueta=m?m[0]:"";
+const fo=nom.match(/^(\d+)/);
+c.fo=fo?fo[1]:"";
+c.asignacion=parsearAsignacion(c.asignacionRaw);
+}
+
+return{elementos,ctos,cables,empalmes,proyecto:true};
+}
 
 const ctos=elementos.filter(x=>
 /CTO/i.test(x.name)||/CTO/i.test(x.nombreElemento)
@@ -78,6 +117,74 @@ const empalmes=elementos.filter(x=>
 );
 
 return{elementos,ctos,cables,empalmes};
+}
+
+function normalizarGuiones(t){
+return String(t??"")
+.replace(/[\u2010-\u2015\u2212]/g,"-")
+.replace(/\u00e2[\u0000-\u0020\uFFFD]{1,3}/g,"-")
+.replace(/[^\S\n]+/g," ")
+.split("\n").map(l=>l.trim()).join("\n")
+.trim();
+}
+
+function expandirLista(s){
+const out=[];
+for(const tok of String(s??"").split("+")){
+const t=tok.trim();
+if(!t)continue;
+const m=t.match(/^(\d+)-(\d+)$/);
+if(m){
+const a=Number(m[1]),b=Number(m[2]);
+for(let i=a;i<=b;i++)out.push(i);
+}else if(/^\d+$/.test(t)){
+out.push(Number(t));
+}
+}
+return out;
+}
+
+function parsearAsignacion(t){
+const norm=normalizarGuiones(t);
+const lineas=norm.split("\n").map(l=>l.trim());
+const unidas=[];
+
+for(const l of lineas){
+if(!l)continue;
+const esCodigo=/^(DV|BALM|ABA|MUSK|\d+\s*FM)/i.test(l);
+if(unidas.length&&!esCodigo){
+unidas[unidas.length-1]+=" "+l;
+}else{
+unidas.push(l);
+}
+}
+
+const salida=[];
+const otras=[];
+
+for(const l of unidas){
+const m=l.match(/^DV-?(\d+),(\d+(?:-\d+)?)#(.+)$/i);
+if(m){
+salida.push({
+divisor:"DV-"+m[1],
+patillas:expandirLista(m[2]),
+fibras:expandirLista(m[3])
+});
+}else{
+otras.push(l);
+}
+}
+
+return{lineas:salida,otras};
+}
+
+function dataCrudo(p,nombre){
+const d=[...p.getElementsByTagName("*")]
+.find(x=>x.localName==="Data"&&x.getAttribute("name")===nombre);
+if(!d)return"";
+const v=[...d.getElementsByTagName("*")]
+.find(x=>x.localName==="value");
+return v?String(v.textContent??"").replace(/\r/g,"").trim():"";
 }
 
 function divisorPatilla(c){

@@ -1,0 +1,15 @@
+<?xml version="1.0"?><kml><Document>
+<Placemark id="n1"><name>O-1</name><styleUrl>#IconCtoPDA</styleUrl><Point><coordinates>0,0</coordinates></Point></Placemark>
+<Placemark id="seg-in"><name>64KP A100/1</name><styleUrl>#IconFoAER</styleUrl><ExtendedData><Data name="Asignacion"><value>DV-9,1-2#1+3
+DV-8,1-2#5+7
+DV-6,1#9</value></Data><Data name="Longitud"><value>100</value></Data><Data name="Estado"><value>En servicio</value></Data></ExtendedData><LineString><coordinates>10,10 0,0</coordinates></LineString></Placemark>
+<Placemark id="sal1"><name>16KP A100/2</name><styleUrl>#IconFoAER</styleUrl><ExtendedData><Data name="Asignacion"><value>DV-9,1#1</value></Data><Data name="Longitud"><value>50</value></Data><Data name="Estado"><value>En servicio</value></Data></ExtendedData><LineString><coordinates>0,0 -10,10</coordinates></LineString></Placemark>
+<Placemark id="sal2"><name>8KP A100/3</name><styleUrl>#IconFoAER</styleUrl><ExtendedData><Data name="Asignacion"><value>DV-8,1#1</value></Data><Data name="Longitud"><value>40</value></Data><Data name="Estado"><value>En servicio</value></Data></ExtendedData><LineString><coordinates>0,0 -10,-10</coordinates></LineString></Placemark>
+<Placemark id="sal3"><name>8KP A100/4</name><styleUrl>#IconFoAER</styleUrl><ExtendedData><Data name="Asignacion"><value>DV-6,1#9</value></Data><Data name="Longitud"><value>30</value></Data><Data name="Estado"><value>En servicio</value></Data></ExtendedData><LineString><coordinates>0,0 0,-20</coordinates></LineString></Placemark>
+<Placemark id="n2"><name>O-2</name><styleUrl>#IconCtoPDA</styleUrl><Point><coordinates>0,20</coordinates></Point></Placemark>
+<Placemark id="seg-hoja"><name>8KP A100/5</name><styleUrl>#IconFoAER</styleUrl><ExtendedData><Data name="Asignacion"><value>DV-9,4#1</value></Data><Data name="Longitud"><value>60</value></Data><Data name="Estado"><value>En servicio</value></Data></ExtendedData><LineString><coordinates>0,20 5,25</coordinates></LineString></Placemark>
+<Placemark id="e1"><name>E-1</name><styleUrl>#IconEmpalmeFoPDA</styleUrl><Point><coordinates>0,30</coordinates></Point></Placemark>
+<Placemark id="seg-aba"><name>8KP A100/6</name><styleUrl>#IconFoAER</styleUrl><ExtendedData><Data name="Asignacion"><value>ABA.</value></Data><Data name="Longitud"><value>40</value></Data></ExtendedData><LineString><coordinates>0,30 5,35</coordinates></LineString></Placemark>
+<Placemark id="seg-dv"><name>8KP A100/7</name><styleUrl>#IconFoAER</styleUrl><ExtendedData><Data name="Asignacion"><value>DV-9,5#9</value></Data><Data name="Longitud"><value>30</value></Data></ExtendedData><LineString><coordinates>0,30 -5,35</coordinates></LineString></Placemark>
+<Placemark id="rot"><name>8KP A100/8</name><styleUrl>#IconTextFo</styleUrl><Point><coordinates>50,50</coordinates></Point></Placemark>
+</Document></kml>

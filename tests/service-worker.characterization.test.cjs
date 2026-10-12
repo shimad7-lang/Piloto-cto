@@ -12,7 +12,7 @@ function loadWorker() {
   const caches = {
     opened: [],
     async open(name) { caches.opened.push(name); return cache; },
-    async keys() { return ["old-cache", "piloto-cto-v19-v4-share-first"]; },
+    async keys() { return ["old-cache", "piloto-cto-v19-v4-share-first", "piloto-cto-v5-old-cache"]; },
     async delete(name) { caches.deleted = [...(caches.deleted || []), name]; return true; },
     async match(request) { caches.matched = request; return null; }
   };
@@ -69,19 +69,19 @@ async function dispatchFetch(worker, req) {
   return event.response;
 }
 
-test("install precachea aplicación y ruta share-target; activate elimina caché anterior", async () => {
+test("install precachea v5; activate actualiza su caché sin borrar main ni v4", async () => {
   const worker = loadWorker();
   const install = { waitUntil(promise) { this.done = promise; } };
   worker.listeners.install(install);
   await install.done;
-  assert.deepEqual(worker.caches.opened, ["piloto-cto-v20-v4-elementos-share-retry"]);
+  assert.deepEqual(worker.caches.opened, ["piloto-cto-v5-cable-label"]);
   assert.deepEqual(Array.from(worker.cache.precached), ["./", "./index.html", "./app-core.js", "./app-kml.js", "./app-pdf.js", "./app-processing.js", "./app-ui.js", "./app-share.js", "./manifest.webmanifest", "./share-target.html"]);
   assert.equal(worker.self.skipped, true);
 
   const activate = { waitUntil(promise) { this.done = promise; } };
   worker.listeners.activate(activate);
   await activate.done;
-  assert.deepEqual(worker.caches.deleted, ["old-cache", "piloto-cto-v19-v4-share-first"]);
+  assert.deepEqual(worker.caches.deleted, ["piloto-cto-v5-old-cache"]);
   assert.equal(worker.self.claimed, true);
 });
 

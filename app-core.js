@@ -25,6 +25,11 @@ return String(v??"")
 .replaceAll("'","&#039;");
 }
 
+function valorUtil(v){
+const t=limpiarTexto(v);
+return t&&t.toUpperCase()!=="NA"?t:"";
+}
+
 function estado(m,t=""){
 $("estado").textContent=m;
 $("estado").className="estado "+t;
