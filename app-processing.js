@@ -498,6 +498,13 @@ $("texto").textContent=xml;
 const esKMZ=nombre.endsWith(".kmz");
 const datosKML=analizarKML(xml);
 const datos=esKMZ?clasificarElementosKMZ(xml,datosKML):datosKML;
+
+// Localizador: poblar el selector de origenes con los equipos del circuito.
+if(typeof poblarOrigenes==="function"){
+poblarOrigenes(datos.elementos);
+if(typeof inicializarLocalizador==="function")inicializarLocalizador();
+}
+
 const filtros=lista($("ctos").value);
 const filtroEmpalme=limpiarTexto($("empalme").value);
 

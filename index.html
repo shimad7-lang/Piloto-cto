@@ -31,7 +31,7 @@ h2{margin-top:0;color:var(--oscuro)}
 .formulario{display:grid;grid-template-columns:1fr 1fr;gap:15px}
 .campo{display:flex;flex-direction:column;gap:7px}
 label{font-weight:bold}
-input{padding:11px;border:1px solid #b9c4d0;border-radius:7px;font-size:15px}
+input,select{padding:11px;border:1px solid #b9c4d0;border-radius:7px;font-size:15px}
 .ayuda{color:#637083;font-size:12px}
 .botones{display:flex;flex-wrap:wrap;gap:10px;margin-top:17px}
 button{border:0;border-radius:7px;padding:10px 15px;font-weight:bold;cursor:pointer}
@@ -148,6 +148,26 @@ accept=".pdf,.kml,.kmz,application/pdf,application/vnd.google-earth.kml+xml,appl
 </section>
 
 <section class="tarjeta">
+<h2>3. Localizador de cortes</h2>
+<div class="formulario">
+<div class="campo">
+<label for="origenMedicion">Origen de Medición</label>
+<select id="origenMedicion"><option value="">— extrae un circuito —</option></select>
+<span class="ayuda">Raíz desde la que se mide (p. ej. CT DURANGO).</span>
+</div>
+<div class="campo">
+<label for="metrosCorte">Metros desde el origen</label>
+<input id="metrosCorte" type="number" min="0" placeholder="Ejemplo: 2600">
+<span class="ayuda">Distancia acumulada con tortuosidad de cable y +5 m por caja.</span>
+</div>
+</div>
+<div class="botones">
+<button id="localizar" class="btn-principal">Calcular corte</button>
+</div>
+<div id="resultadoLocalizador"></div>
+</section>
+
+<section class="tarjeta">
 <details>
 <summary>Mostrar texto/XML procesado</summary>
 <pre id="texto">No hay datos cargados.</pre>
@@ -162,5 +182,6 @@ accept=".pdf,.kml,.kmz,application/pdf,application/vnd.google-earth.kml+xml,appl
 <script src="./app-processing.js"></script>
 <script src="./app-ui.js"></script>
 <script src="./app-share.js"></script>
+<script src="./localizer.js"></script>
 </body>
 </html>
