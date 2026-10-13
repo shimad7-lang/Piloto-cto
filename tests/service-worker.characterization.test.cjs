@@ -69,12 +69,12 @@ async function dispatchFetch(worker, req) {
   return event.response;
 }
 
-test("install precachea v5; activate actualiza su caché sin borrar main ni v4", async () => {
+test("install precachea v6-release; activate actualiza su caché sin borrar main ni v4", async () => {
   const worker = loadWorker();
   const install = { waitUntil(promise) { this.done = promise; } };
   worker.listeners.install(install);
   await install.done;
-  assert.deepEqual(worker.caches.opened, ["piloto-cto-v5-cable-label"]);
+  assert.deepEqual(worker.caches.opened, ["piloto-cto-v6-release"]);
   assert.deepEqual(Array.from(worker.cache.precached), ["./", "./index.html", "./app-core.js", "./app-kml.js", "./app-pdf.js", "./app-processing.js", "./app-ui.js", "./app-share.js", "./manifest.webmanifest", "./share-target.html"]);
   assert.equal(worker.self.skipped, true);
 
