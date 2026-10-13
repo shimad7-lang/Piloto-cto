@@ -80,45 +80,62 @@ const origen=camino[0];
 const nombreOrigen=origen.nombreElemento||origen.name||origen.id||"";
 const metros=Number(metrosDesdeOrigen)||0;
 
-let acum=0;
+// Distancia acumulada REAL al inicio de este paso. Cuando el KML trae
+// distanciaAcumulada es ground truth (medida); si no, se estima con
+// tortuosidad de cable + slack de cajas.
+const _daFin=e=>{
+if(e.distancia!==""&&e.distancia!=null&&Number.isFinite(_num(e.distancia)))return _num(e.distancia);
+const longDecl=_num(e.longitud);
+const baseL=longDecl>0?longDecl:_longGeom(e.vertices||[]);
+return _esEquipo(e)?SLACK_EQUIPO:baseL*_factorTortuosidad(baseL,e);
+};
+
+const base=_num(origen.distancia)||0;
+let prevAcum=base;
 const ruta=[nombreOrigen];
+let cajas=0;
 
 for(let k=0;k<camino.length;k++){
 const e=camino[k];
-if(k===0&&_esEquipo(e))continue;
+let finAcum;
+if(e.distancia!==""&&e.distancia!=null&&Number.isFinite(_num(e.distancia))){
+finAcum=_num(e.distancia);
+}else{
+finAcum=prevAcum+_daFin(e);
+}
+if(finAcum<prevAcum)finAcum=prevAcum;
+
+const largo=finAcum-prevAcum;
+const inicioRel=prevAcum-base;
+const finRel=finAcum-base;
 
 if(_esEquipo(e)){
-if(k>0&&metros>0&&acum+SLACK_EQUIPO>=metros){
+if(k>0&&metros>inicioRel&&metros<=finRel+1e-9){
 return{encontrado:true,metros,nombreOrigen,idOrigen:idElementoOrigen,
 ordenTramo:e.orden,tramoId:e.id,tramoNombre:e.nombreElemento||e.name||"",tipo:"EQUIPMENT",
 estructuraInicio:e.estructuraInicio||"",estructuraFinal:e.estructuraFinal||"",
-lat:e.lat,lon:e.lon,ruta:ruta.slice()};
+lat:e.lat,lon:e.lon,cajas,ruta:ruta.slice()};
 }
-acum+=SLACK_EQUIPO;
-ruta.push((e.nombreElemento||e.name||e.id||"")+" (+"+SLACK_EQUIPO+" m)");
-continue;
+if(k>0){
+cajas++;
+ruta.push((e.nombreElemento||e.name||e.id||"")+" (caja)");
 }
-
-const longDecl=_num(e.longitud);
-const base=longDecl>0?longDecl:_longGeom(e.vertices||[]);
-const factor=_factorTortuosidad(base,e);
-const efectiva=base*factor;
-
-if(acum+efectiva>=metros){
-const dentro=metros-acum;
-const frac=efectiva>0?Math.max(0,Math.min(1,dentro/efectiva)):0;
+}else{
+if(metros>inicioRel&&metros<=finRel+1e-9){
+const frac=largo>0?Math.max(0,Math.min(1,(metros-inicioRel)/largo)):0;
 const p=_interpolar(e.vertices||[],frac)||{lat:e.lat,lon:e.lon};
 return{encontrado:true,metros,nombreOrigen,idOrigen:idElementoOrigen,
 ordenTramo:e.orden,tramoId:e.id,tramoNombre:e.nombreElemento||e.name||"",tipo:"TRANSMEDIA",
 estructuraInicio:e.estructuraInicio||"",estructuraFinal:e.estructuraFinal||"",
-lat:p.lat,lon:p.lon,factorTortuosidad:factor,longitudTramo:base,ruta:ruta.slice()};
+lat:p.lat,lon:p.lon,cajas,distanciaReal:Number.isFinite(_num(e.distancia)),ruta:ruta.slice()};
 }
-acum+=efectiva;
-ruta.push((e.nombreElemento||e.name||e.id||"")+" ("+Math.round(efectiva)+" m)");
+ruta.push((e.nombreElemento||e.name||e.id||"")+" ("+Math.round(largo)+" m)");
+}
+prevAcum=finAcum;
 }
 
 return{encontrado:false,metros,nombreOrigen,idOrigen:idElementoOrigen,
-metrosAcumulados:acum,mensaje:"La distancia supera el circuito desde el origen.",ruta:ruta.slice()};
+metrosAcumulados:prevAcum-base,cajas,mensaje:"La distancia supera el circuito desde el origen.",ruta:ruta.slice()};
 }
 
 function detectarRaices(circuitoArray){

@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-const { ROOT, loadApp } = require("./helpers.cjs");
+const { ROOT } = require("./helpers.cjs");
 
 // Carga localizer.js en un contexto aislado (funciones puras, sin DOM).
 function cargarLocalizer() {
@@ -13,13 +13,10 @@ function cargarLocalizer() {
   return ctx;
 }
 
-function circuitoDurango() {
-  const { api } = loadApp();
-  const xml = fs.readFileSync(path.join(ROOT, "tests", "durango-roseta.kml"), "utf8");
-  return api.analizarKML(xml).elementos;
-}
+// Circuito REAL Durango-Roseta (KML DNG 1783630), validado con el archivo real.
+const circuitoDurango = () => require("./durango-roseta.fixture.cjs");
 
-test("localizador: detecta CT DURANGO como raiz por defecto", () => {
+test("localizador: detecta CT DURANGO (RO 01) como raiz por defecto", () => {
   const L = cargarLocalizer();
   const circuito = circuitoDurango();
   const info = L.detectarRaices(circuito);
@@ -27,7 +24,7 @@ test("localizador: detecta CT DURANGO como raiz por defecto", () => {
   assert.ok(info.raices.some(r => r.id === "1783630"));
 });
 
-test("localizador: corte a 2600 m desde CT DURANGO cae en orden 11-12 (aereo)", () => {
+test("localizador: corte a 2600 m desde CT DURANGO cae en orden 12 con 3 cajas", () => {
   const L = cargarLocalizer();
   const circuito = circuitoDurango();
   const r = L.calcularPosicionDeCorte(circuito, 2600, "1783630");
@@ -38,9 +35,26 @@ test("localizador: corte a 2600 m desde CT DURANGO cae en orden 11-12 (aereo)", 
   assert.ok(orden >= 11 && orden <= 12, "orden del corte=" + orden);
   assert.ok(orden > 9, "no debe caer antes de orden 9");
   assert.ok(r.lat && r.lon, "debe interpolar coordenadas");
-  assert.equal(r.ruta[0], "CT DURANGO");
-  // Debe haber contabilizado cajas intermedias (+5 m) antes del aereo.
-  assert.ok(r.ruta.length >= 6, "ruta debe cruzarse con varias cajas");
+  assert.equal(r.cajas, 3, "cruza 3 cajas (7579, 5423, 20737)");
+  assert.equal(r.distanciaReal, true, "usa distanciaAcumulada del KML");
+  assert.equal(r.ruta[0], "RO 01");
+  // La ruta menciona las cajas intermedias antes del punto de corte.
+  assert.ok(r.ruta.some(x => /7579/.test(x)));
+  assert.ok(r.ruta.some(x => /5423/.test(x)));
+  assert.ok(r.ruta.some(x => /20737/.test(x)));
+});
+
+test("localizador: usa distanciaAcumulada (no infla) => cortes escalan por orden", () => {
+  const L = cargarLocalizer();
+  const circuito = circuitoDurango();
+  // Con distanciaAcumulada real: 500m->ord4, 1500m->ord4, 2100m->ord9.
+  assert.equal(Number(L.calcularPosicionDeCorte(circuito, 500, "1783630").ordenTramo), 4);
+  assert.equal(Number(L.calcularPosicionDeCorte(circuito, 1500, "1783630").ordenTramo), 4);
+  assert.equal(Number(L.calcularPosicionDeCorte(circuito, 2100, "1783630").ordenTramo), 9);
+  // 2700m supera ord15, cae en el aereo final ord16 con 5 cajas.
+  const lejos = L.calcularPosicionDeCorte(circuito, 2700, "1783630");
+  assert.equal(Number(lejos.ordenTramo), 16);
+  assert.equal(lejos.cajas, 5);
 });
 
 test("localizador: distancia que supera el circuito no encontrado", () => {
@@ -58,13 +72,3 @@ test("localizador: origen inexistente devuelve error", () => {
   assert.ok(r.error);
 });
 
-test("localizador: tortuosidad subt. 520 m aplica 1.15 (598 m)", () => {
-  const L = cargarLocalizer();
-  const circuito = circuitoDurango();
-  // 0 m cae en el primer cable (orden 2) con factor 1.15 sobre 520 = 598.
-  const r = L.calcularPosicionDeCorte(circuito, 100, "1783630");
-  assert.equal(r.encontrado, true);
-  assert.equal(Number(r.ordenTramo), 2);
-  assert.equal(r.factorTortuosidad, 1.15);
-  assert.equal(r.longitudTramo, 520);
-});
