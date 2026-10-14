@@ -183,5 +183,28 @@ accept=".pdf,.kml,.kmz,application/pdf,application/vnd.google-earth.kml+xml,appl
 <script src="./app-ui.js"></script>
 <script src="./app-share.js"></script>
 <script src="./localizer.js"></script>
+<!-- SECCIÓN LOCALIZADOR DE CORTES -->
+<section id="seccion-localizador" style="margin-top:20px; padding:15px; border:1px solid #ccc; background:#f8f9fa; border-radius:8px;">
+    <h3 style="margin-top:0; color:#333;">🔍 Localizador de Averías / Cortes</h3>
+    
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+        <label for="sel-origen">Origen:</label>
+        <select id="sel-origen" style="padding:6px; min-width:150px;"></select>
+        
+        <label for="inp-distancia">Distancia (m):</label>
+        <input type="number" id="inp-distancia" placeholder="ej. 2600" style="width:100px; padding:6px;">
+        
+        <button onclick="buscarCorte()" style="background:#007bff; color:white; border:none; padding:8px 15px; cursor:pointer; border-radius:4px; font-weight:bold;">
+            Calcular Ubicación
+        </button>
+    </div>
+
+    <!-- Área de Resultados -->
+    <div id="resultado-corte" class="hidden" style="padding:10px; background:#e8f4fd; border-left:4px solid #007bff; display:none;">
+        <strong>📍 Resultado Estimado:</strong><br>
+        <span id="res-detalle"></span><br><br>
+        <a href="#" id="res-link-maps" target="_blank" style="color:#0056b3; text-decoration:underline; font-weight:bold;">🗺️ Ver Punto Exacto en Google Maps</a>
+    </div>
+</section>
 </body>
 </html>
