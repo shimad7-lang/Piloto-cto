@@ -1,78 +1,79 @@
-/* ================= TABLA ================= */
-
 function initLocalizador() {
     const sec = document.getElementById('seccion-localizador');
     const sel = document.getElementById('sel-origen');
     
-    // 1. Verificación Básica
+    // Verificación básica
     if (!sec || !sel) {
-        console.error("❌ ERROR UI: No se encuentran #seccion-localizador o #sel-origen");
+        console.error("ERROR UI: Elementos HTML no encontrados.");
         return;
     }
 
-    // 2. Forzar Visibilidad (por si acaso CSS lo oculta)
+    // Forzar visibilidad
     sec.style.display = 'block';
     
-    // 3. Limpiar y Preparar Dropdown
-    sel.innerHTML = '<option value="">-- Cargando... --</option>';
-    sel.disabled = true; // Bloquear hasta tener datos
+    // Limpiar dropdown
+    sel.innerHTML = ''; 
+    
+    // Crear opción por defecto
+    const optDefault = document.createElement('option');
+    optDefault.value = "";
+    optDefault.textContent = "-- Seleccionar Origen --";
+    sel.appendChild(optDefault);
 
-    // 4. Verificar Datos Globales
+    // Verificar datos
     if (!window.registros || window.registros.length === 0) {
-        console.warn("⚠️ WARNING: window.registros está vacío.");
-        sel.innerHTML = '<option value="">Sin datos (Carga KML)</option>';
+        const optEmpty = document.createElement('option');
+        optEmpty.textContent = "Sin datos cargados";
+        optEmpty.disabled = true;
+        sel.appendChild(optEmpty);
+        console.warn("WARNING: No hay registros.");
         return;
     }
 
     let count = 0;
-    const optionsFragment = document.createDocumentFragment();
-
-    // Añadimos opción vacía primero
-    const defaultOpt = document.createElement('option');
-    defaultOpt.value = "";
-    defaultOpt.text = "-- Seleccionar Origen --";
-    optionsFragment.appendChild(defaultOpt);
-
-    // 5. Iterar sobre TODOS los registros para encontrar orígenes válidos
-    // Usamos criterios muy laxos para asegurar que algo aparezca
+    
+    // Iterar sobre TODOS los registros
     window.registros.forEach(function(r) {
-        // Identificadores posibles de equipo/caja/origen
-        const nombre = String(r.nombreElemento || r.elemento || r.nombreCto || r.nombreEmpalme || "").toUpperCase();
-        const tipo = String(r.tipoRegistro || r.elementType || "").toUpperCase();
+        // Extraer nombre y tipo de forma segura
+        const nombreStr = String(r.nombreElemento || r.elemento || r.nombreCto || r.nombreEmpalme || "").toUpperCase();
+        const tipoStr = String(r.tipoRegistro || r.elementType || "").toUpperCase();
         
-        // Filtro Ampliado: Cualquier cosa que parezca un nodo de red (EMP, EQUIPMENT, CT, RO, CAJA, ARQ)
-        const esPosibleOrigen = 
-            tipo.includes("EMP") || 
-            tipo.includes("EQUIP") ||
-            nombre.includes("CT") || 
-            nombre.includes("RO") ||
-            nombre.includes("CAJA") ||
-            nombre.includes("ARQ") ||
-            nombre.includes("CAMARA");
+        // Filtro MUY AMPLIO para asegurar que aparezcan opciones
+        // Aceptamos cualquier cosa que parezca un nodo de red
+        const esOrigenValido = 
+            tipoStr.includes("EMP") || 
+            tipoStr.includes("EQUIP") ||
+            nombreStr.includes("CT") || 
+            nombreStr.includes("RO") ||
+            nombreStr.includes("CAJA") ||
+            nombreStr.includes("ARQ") ||
+            nombreStr.includes("CAMARA") ||
+            nombreStr.includes("REGISTRO");
 
-        if (esPosibleOrigen) {
+        if (esOrigenValido) {
             const opt = document.createElement('option');
-            // ID único obligatorio para localizer.js
-            opt.value = r.idElemento || r.idEmpalme || r.id || `auto_${count}`;
             
-            // Texto legible
-            const etiqueta = r.nombreElemento || r.elemento || r.nombreCto || "Equipo Sin Nombre";
-            opt.text = `${etiqueta} (${opt.value})`;
+            // Asignar ID único o fallback
+            const idVal = r.idElemento || r.idEmpalme || r.id || `idx_${count}`;
+            opt.value = idVal;
             
-            optionsFragment.appendChild(opt);
+            // Texto visible
+            const label = r.nombreElemento || r.elemento || r.nombreCto || "Equipo";
+            opt.textContent = `${label} (${idVal})`;
+            
+            sel.appendChild(opt);
             count++;
         }
     });
 
-    // 6. Insertar todas las opciones de golpe (más rápido y seguro)
-    sel.appendChild(optionsFragment);
-    sel.disabled = false; // Habilitar selección
-
-    // Feedback Visual
+    // Feedback final
     if (count === 0) {
-        sel.innerHTML = '<option value="">⚠️ No se hallaron equipos (Revisa KML)</option>';
-        console.error("💥 CRÍTICO: El filtro no encontró ningún registro como origen.");
+        const optNone = document.createElement('option');
+        optNone.textContent = "No se encontraron equipos válidos";
+        optNone.disabled = true;
+        sel.appendChild(optNone);
+        console.error("CRITICO: El filtro no encontró nada. Revisa las propiedades de tus objetos registro.");
     } else {
-        console.log(`✅ Localizador listo: ${count} orígenes disponibles.`);
+        console.log(`OK: Localizador poblado con ${count} opciones.`);
     }
 }
