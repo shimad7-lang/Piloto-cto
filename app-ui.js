@@ -64,7 +64,9 @@ ${copiar}
 <td>${evidencias}</td>
 </tr>`;
 }).join("");
-}
+// Dentro de function pintar(){ ... }
+// Añade esto justo antes del último }
+mostrarLocalizador(); }
 
 function copiarTexto(i){
 const x=registros[i];
@@ -220,4 +222,53 @@ if (originalPintarGlobal) {
     };
 } else {
     document.addEventListener('datosCargados', poblarOrigenesLocalizador);
+}
+/* --- CONEXIÓN MÍNIMA LOCALIZADOR --- */
+
+function mostrarLocalizador() {
+    const sec = document.getElementById('seccion-localizador');
+    const sel = document.getElementById('sel-origen');
+    
+    if (!sec || !sel) return; // Si no existe el HTML, salimos
+    
+    sec.style.display = 'block'; // Hacemos visible la sección
+    
+    // Poblar dropdown con equipos (EMP) encontrados en registros
+    sel.innerHTML = '<option value="">-- Seleccionar --</option>';
+    
+    window.registros.forEach(function(r) {
+        // Filtramos solo elementos tipo EQUIPMENT/EMP
+        if (r.tipoRegistro === "EMP" || r.elementType === "EQUIPMENT") {
+            const opt = document.createElement('option');
+            opt.value = r.idElemento || r.idEmpalme || "";
+            opt.text = `${r.elemento || r.nombreEmpalme || "Equipo"} (${opt.value})`;
+            sel.add(opt);
+        }
+    });
+}
+
+async function buscarCorte() {
+    const origenId = document.getElementById('sel-origen').value;
+    const distStr = document.getElementById('inp-distancia').value;
+    const resDiv = document.getElementById('res-corte');
+    
+    if (!origenId || !distStr) {
+        alert("Selecciona origen y distancia");
+        return;
+    }
+
+    try {
+        // Llamamos a la función core de localizer.js
+        if (typeof calcularPosicionDeCorte !== 'function') {
+             throw new Error("localizer.js no cargado correctamente.");
+        }
+
+        const resultado = await calcularPosicionDeCorte(window.registros, parseFloat(distStr), origenId);
+        
+        resDiv.innerHTML = `✅ Corte estimado en: ${resultado.tramoNombre}<br>Coord: ${resultado.lat.toFixed(5)}, ${resultado.lon.toFixed(5)}<br><a href="https://www.google.com/maps?q=${resultado.lat},${resultado.lon}" target="_blank">Ver Mapa</a>`;
+        
+    } catch (err) {
+        console.error(err);
+        resDiv.innerHTML = `❌ Error: ${err.message}`;
+    }
 }
