@@ -460,12 +460,15 @@ test("extracción manual informa archivo ausente y procesa KML con filtros de CT
   await app.api.extraer();
   assert.match(app.document.getElementById("estado").textContent, /Resultados: 0/);
   assert.equal(app.document.getElementById("csv").disabled, true);
+  assert.match(app.document.getElementById("origenMedicion").innerHTML, /no hay orígenes en los resultados/);
 
   app.document.getElementById("ctos").value = "123";
   await app.api.extraer();
   assert.match(app.document.getElementById("estado").textContent, /Resultados: 1/);
   assert.equal(app.document.getElementById("csv").disabled, false);
   assert.match(app.document.getElementById("tabla").innerHTML, /A1\/2/);
+  assert.match(app.document.getElementById("origenMedicion").innerHTML, /value="cto-1"/);
+  assert.doesNotMatch(app.document.getElementById("origenMedicion").innerHTML, /splice-1/);
 });
 
 test("extracción manual procesa KMZ y PDF a través de la misma interfaz", async () => {
@@ -516,6 +519,10 @@ test("KMZ compartido reconoce CTO, EMP y cables por nombre y estilo de capa", as
 
   const rows = plain(app.api.getState().registros);
   assert.match(app.document.getElementById("estado").textContent, /Resultados: 2/);
+  const origenesProyecto = app.document.getElementById("origenMedicion").innerHTML;
+  assert.match(origenesProyecto, /CT-182 16P/);
+  assert.match(origenesProyecto, /E-23335 MINICAU/);
+  assert.doesNotMatch(origenesProyecto, /8KP A101\/368/);
   assert.match(app.document.getElementById("diagnostico").innerHTML, /EMP asociados a CTO \(mismo divisor\/patilla\): <b>0<\/b>/);
   assert.deepEqual(rows.map(row => row.tipoRegistro).sort(), ["CTO", "EMP"]);
   assert.equal(rows.find(row => row.tipoRegistro === "CTO").elemento, "CT-182 16P");

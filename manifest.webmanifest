@@ -1,14 +1,14 @@
 {
-"name": "Piloto CTO",
-"short_name": "Piloto CTO",
-"description": "Recepción y análisis de archivos PDF, KML y KMZ desde WhatsApp.",
+"name": "Trace a Circuit",
+"short_name": "Trace Circuit",
+"description": "Análisis de redes de fibra y localización de cortes desde archivos PDF, KML y KMZ.",
 "lang": "es",
 "start_url": "./?source=pwa",
 "scope": "./",
 "display": "standalone",
 "orientation": "portrait",
-"theme_color": "#155eef",
-"background_color": "#f4f6fa",
+"theme_color": "#123b52",
+"background_color": "#f1f5f6",
 "prefer_related_applications": false,
 "icons": [
 {

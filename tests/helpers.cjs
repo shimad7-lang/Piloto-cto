@@ -118,6 +118,7 @@ function loadApp({ pdfjsLib, JSZip, location, launchQueue, indexedDB } = {}) {
 
   const elements = new Map();
   const links = [];
+  const objectUrls = [];
   const events = {};
   const document = {
     title: "Piloto CTO",
@@ -144,7 +145,8 @@ function loadApp({ pdfjsLib, JSZip, location, launchQueue, indexedDB } = {}) {
   };
   class AppURL extends URL {}
   AppURL.createObjectURL = blob => {
-    links.at(-1).blob = blob;
+    objectUrls.push(blob);
+    if (links.at(-1)) links.at(-1).blob = blob;
     return "blob:characterization";
   };
   AppURL.revokeObjectURL = () => {};
@@ -186,7 +188,7 @@ function loadApp({ pdfjsLib, JSZip, location, launchQueue, indexedDB } = {}) {
     "dedupCables", "leerPDF", "analizarPDF", "registroKML", "registroPDF",
     "claveRegistro", "deduplicarRegistros", "extraer", "pintar", "copiarTexto",
     "campoCSV", "descargarCSV", "procesarArchivoCompartido",
-    "formatearDiagnosticoRecepcion", "recuperarArchivoCompartido",
+    "formatearDiagnosticoRecepcion", "recuperarArchivoCompartido", "mostrarEnlaceArchivo",
     "borrarArchivoCompartido", "instalarRecepcionAndroid",
     "iniciarRecuperacionCompartida", "calcularPosicionDeCorte", "detectarRaices", "poblarOrigenes"
   ];
@@ -194,7 +196,7 @@ function loadApp({ pdfjsLib, JSZip, location, launchQueue, indexedDB } = {}) {
     `\nglobalThis.__api={${exported.join(",")},getState:()=>({registros,elementosPDF,textoOriginal,eliminados,archivoCompartido}),setState:(v={})=>{if(v.registros!==undefined)registros=v.registros;if(v.elementosPDF!==undefined)elementosPDF=v.elementosPDF;if(v.eliminados!==undefined)eliminados=v.eliminados;}};`;
   vm.runInNewContext(instrumented, context, { filename: "app-modules.js" });
 
-  return { api: context.__api, context, document, elements, links, events, html };
+  return { api: context.__api, context, document, elements, links, objectUrls, events, html };
 }
 
 function supportedKml() {

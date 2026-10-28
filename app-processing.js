@@ -471,6 +471,23 @@ eliminados++;
 return [...mapa.values()];
 }
 
+let urlArchivoAnalizado="";
+let urlsArchivoAnalizado=[];
+function mostrarEnlaceArchivo(archivo){
+const enlace=$("verArchivo");
+if(!enlace||!archivo||typeof URL.createObjectURL!=="function")return;
+for(const url of urlsArchivoAnalizado)URL.revokeObjectURL(url);
+urlsArchivoAnalizado=[];
+const nombre=String(archivo.name||"archivo analizado"),extension=nombre.toLowerCase().split(".").pop();
+const tipo={pdf:"application/pdf",kml:"text/xml;charset=utf-8",kmz:"application/vnd.google-earth.kmz"}[extension]||archivo.type||"application/octet-stream";
+const vista=typeof File==="function"?new File([archivo],nombre,{type:tipo}):new Blob([archivo],{type:tipo});
+urlArchivoAnalizado=URL.createObjectURL(vista);
+urlsArchivoAnalizado.push(urlArchivoAnalizado);
+enlace.href=urlArchivoAnalizado;
+enlace.textContent="Ver archivo: "+String(archivo.name||"archivo analizado");
+enlace.hidden=false;
+}
+
 async function extraer(){
 const archivo=$("archivo").files[0];
 
@@ -498,12 +515,6 @@ $("texto").textContent=xml;
 const esKMZ=nombre.endsWith(".kmz");
 const datosKML=analizarKML(xml);
 const datos=esKMZ?clasificarElementosKMZ(xml,datosKML):datosKML;
-
-// Localizador: poblar el selector de origenes con los equipos del circuito.
-if(typeof poblarOrigenes==="function"){
-poblarOrigenes(datos.elementos);
-if(typeof inicializarLocalizador==="function")inicializarLocalizador();
-}
 
 const filtros=lista($("ctos").value);
 const filtroEmpalme=limpiarTexto($("empalme").value);
@@ -568,6 +579,16 @@ filtro===numero||filtro===elemento.id||texto.includes(normalizar(filtro))
 for(const elemento of elementos)
 registros.push(...registroKML(elemento,datos,filtroEmpalme,esKMZ));
 
+// El desplegable replica los elementos que aparecen en la búsqueda, pero el motor
+// conserva todos los elementos del KML para reconstruir la conectividad.
+if(typeof poblarOrigenes==="function"){
+const idsResultados=new Set(registros.map(r=>String(r.idElemento||r.idEmpalme||"")).filter(Boolean));
+const nombresResultados=new Set(registros.map(r=>normalizar(r.elemento||r.nombreCto||r.nombreEmpalme||"")).filter(Boolean));
+const origenesVisibles=datos.elementos.filter(e=>idsResultados.has(String(e.id||""))||nombresResultados.has(normalizar(e.nombreElemento||e.name||e.id||"")));
+poblarOrigenes(datos.elementos,origenesVisibles);
+if(typeof inicializarLocalizador==="function")inicializarLocalizador();
+}
+
 $("diagnostico").innerHTML=
 "Placemark: <b>"+datos.elementos.length+"</b> · "+
 "CTO: <b>"+datos.ctos.length+"</b> · "+
@@ -578,6 +599,7 @@ $("diagnostico").innerHTML=
 (modoCircuito?registros.filter(x=>x.lat&&x.lon).length:elementos.filter(x=>x.lat&&x.lon).length)+"</b>";
 
 }else if(nombre.endsWith(".pdf")){
+if(typeof poblarOrigenes==="function")poblarOrigenes([],[]);
 const paginas=await leerPDF(archivo);
 const texto=paginas.map(pagina=>pagina.map(item=>item.str||"").join("\n")).join("\n");
 textoOriginal=texto;
@@ -611,6 +633,7 @@ throw Error("Formato no compatible.");
 }
 
 registros=deduplicarRegistros(registros);
+mostrarEnlaceArchivo(archivo);
 // 1. Guardamos globalmente POR SI ACASO (para el hook antiguo)
 window.registros = registros;
 
