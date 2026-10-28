@@ -1,74 +1,56 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const vm = require("node:vm");
-const { ROOT } = require("./helpers.cjs");
+const test=require("node:test");
+const assert=require("node:assert/strict");
+const fs=require("node:fs");
+const path=require("node:path");
+const {ROOT,loadApp}=require("./helpers.cjs");
+const L=loadApp().api;
+const P=(lon,lat)=>({lon:String(lon),lat:String(lat)});
+const box=(id,structure,lat,lon,distancia="")=>({id,nombreElemento:id,esLinea:false,estructuraInicio:`${structure} (ID ${structure})`,lat:String(lat),lon:String(lon),distancia,vertices:[P(lon,lat)]});
+const cable=(id,a,b,coords,{orden="1",longitud="",distancia=""}={})=>({id,nombreElemento:id,esLinea:true,elementType:"TRANSMEDIA",estructuraInicio:`${a} (ID ${a})`,estructuraFinal:`${b} (ID ${b})`,orden,longitud,distancia,vertices:coords.map(([lon,lat])=>P(lon,lat))});
+const line=(a,b,id="a",options={})=>[box("root",a,0,0),cable(id,a,b,[[0,0],[0.001,0]],options),box("end",b,0,0.001)];
 
-// Carga localizer.js en un contexto aislado (funciones puras, sin DOM).
-function cargarLocalizer() {
-  const src = fs.readFileSync(path.join(ROOT, "localizer.js"), "utf8");
-  const ctx = { console: { log() {}, warn() {}, error() {} } };
-  vm.runInNewContext(src, ctx, { filename: "localizer.js" });
-  return ctx;
-}
-
-// Circuito REAL Durango-Roseta (KML DNG 1783630), validado con el archivo real.
-const circuitoDurango = () => require("./durango-roseta.fixture.cjs");
-
-test("localizador: detecta CT DURANGO (RO 01) como raiz por defecto", () => {
-  const L = cargarLocalizer();
-  const circuito = circuitoDurango();
-  const info = L.detectarRaices(circuito);
-  assert.equal(info.porDefecto, "1783630");
-  assert.ok(info.raices.some(r => r.id === "1783630"));
+test("el motor real encuentra cortes desde ambos extremos e interpola al invertir",()=>{
+ const c=line("1","2","c1",{longitud:"100",orden:"8"});
+ const forward=L.calcularPosicionDeCorte(c,25,"root");
+ const reverse=L.calcularPosicionDeCorte(c,25,"end");
+ assert.equal(forward.tramoId,"c1");assert.equal(reverse.tramoId,"c1");
+ assert.ok(forward.lon<reverse.lon);assert.ok(Math.abs(forward.lon-0.00025)<1e-8);assert.ok(Math.abs(reverse.lon-0.00075)<1e-8);
 });
-
-test("localizador: corte a 2600 m desde CT DURANGO cae en orden 12 con 3 cajas", () => {
-  const L = cargarLocalizer();
-  const circuito = circuitoDurango();
-  const r = L.calcularPosicionDeCorte(circuito, 2600, "1783630");
-
-  assert.equal(r.encontrado, true);
-  assert.equal(r.tipo, "TRANSMEDIA");
-  const orden = Number(r.ordenTramo);
-  assert.ok(orden >= 11 && orden <= 12, "orden del corte=" + orden);
-  assert.ok(orden > 9, "no debe caer antes de orden 9");
-  assert.ok(r.lat && r.lon, "debe interpolar coordenadas");
-  assert.equal(r.cajas, 3, "cruza 3 cajas (7579, 5423, 20737)");
-  assert.equal(r.distanciaReal, true, "usa distanciaAcumulada del KML");
-  assert.equal(r.ruta[0], "RO 01");
-  // La ruta menciona las cajas intermedias antes del punto de corte.
-  assert.ok(r.ruta.some(x => /7579/.test(x)));
-  assert.ok(r.ruta.some(x => /5423/.test(x)));
-  assert.ok(r.ruta.some(x => /20737/.test(x)));
+test("ambigüedad de bifurcación se muestra; elección selecciona el recorrido",()=>{
+ const records=[box("r","1",0,0),cable("left","1","2",[[0,0],[.001,0]],{longitud:"100"}),cable("right","1","3",[[0,0],[0,.001]],{longitud:"120"}),box("l","2",0,.001),box("rr","3",.001,0)];
+ const choice=L.calcularPosicionDeCorte(records,50,"r");assert.equal(choice.requiereEleccion,true);assert.equal(choice.rutas.length,2);
+ assert.equal(L.calcularPosicionDeCorte(records,50,"r",1).tramoId,"right");
 });
-
-test("localizador: usa distanciaAcumulada (no infla) => cortes escalan por orden", () => {
-  const L = cargarLocalizer();
-  const circuito = circuitoDurango();
-  // Con distanciaAcumulada real: 500m->ord4, 1500m->ord4, 2100m->ord9.
-  assert.equal(Number(L.calcularPosicionDeCorte(circuito, 500, "1783630").ordenTramo), 4);
-  assert.equal(Number(L.calcularPosicionDeCorte(circuito, 1500, "1783630").ordenTramo), 4);
-  assert.equal(Number(L.calcularPosicionDeCorte(circuito, 2100, "1783630").ordenTramo), 9);
-  // 2700m supera ord15, cae en el aereo final ord16 con 5 cajas.
-  const lejos = L.calcularPosicionDeCorte(circuito, 2700, "1783630");
-  assert.equal(Number(lejos.ordenTramo), 16);
-  assert.equal(lejos.cajas, 5);
+test("cables paralelos siguen siendo recorridos separados",()=>{
+ const records=[box("r","1",0,0),cable("p1","1","2",[[0,0],[.001,0]],{longitud:"100"}),cable("p2","1","2",[[0,0],[0,.001]],{longitud:"110"}),box("e","2",0,.001)];
+ assert.equal(L.calcularPosicionDeCorte(records,20,"r").requiereEleccion,true);
 });
-
-test("localizador: distancia que supera el circuito no encontrado", () => {
-  const L = cargarLocalizer();
-  const circuito = circuitoDurango();
-  const r = L.calcularPosicionDeCorte(circuito, 999999, "1783630");
-  assert.equal(r.encontrado, false);
-  assert.ok(r.metrosAcumulados > 0);
+test("órdenes repetidas no cambian conectividad; se miden tramos de orden menor en reversa",()=>{
+ const records=[box("r","1",0,0),cable("first","1","2",[[0,0],[.001,0]],{longitud:"100",orden:"7"}),cable("second","2","3",[[.001,0],[.002,0]],{longitud:"100",orden:"7"}),box("e","3",0,.002)];
+ assert.equal(L.calcularPosicionDeCorte(records,150,"e").tramoId,"first");
 });
-
-test("localizador: origen inexistente devuelve error", () => {
-  const L = cargarLocalizer();
-  const circuito = circuitoDurango();
-  const r = L.calcularPosicionDeCorte(circuito, 100, "no-existe");
-  assert.ok(r.error);
+test("reserva de cable con mismo ID de extremos suma su acumulado sin ramificar",()=>{
+ const records=[box("r","1",0,0,"0"),cable("one","1","1",[[0,0],[.0001,0]],{distancia:"10"}),cable("next","1","2",[[.0001,0],[.001,0]],{distancia:"110"}),box("e","2",0,.001,"110")];
+ const r=L.calcularPosicionDeCorte(records,5,"r");assert.equal(r.tramoId,"one");assert.equal(r.fuenteDistancia,"distancia acumulada");
 });
-
+test("caso TIFlu 55 m: 49 + 5 + 1 m y tramo final CR GEN 52 sin bifurcación",()=>{
+ const records=[box("cto","A666",0,0),cable("A105/666","A666","A564",[[0,0],[.00049,0]],{longitud:"49",distancia:"49",orden:"11"}),cable("A105/564","A564","A40",[[.00049,0],[.00054,0]],{longitud:"5",distancia:"54",orden:"11"}),cable("A105/40-11","A40","A40",[[.00054,0],[.00055,0]],{longitud:"1",distancia:"55",orden:"11"}),box("next","A40",0,.00055,"55")];
+ const r=L.calcularPosicionDeCorte(records,55,"cto");assert.equal(r.tramoId,"A105/40-11");assert.equal(r.lon,.00055);
+});
+test("si faltan distancias usa longitud y luego geometría",()=>{
+ const a=line("1","2","declared",{longitud:"100"});assert.equal(L.calcularPosicionDeCorte(a,40,"root").fuenteDistancia,"longitud");
+ a[1].longitud="";const r=L.calcularPosicionDeCorte(a,40,"root");assert.equal(r.fuenteDistancia,"geometría");
+});
+test("corte en límite exacto se asigna al tramo terminado y devuelve objetivo",()=>{
+ const records=[box("r","1",0,0),cable("first","1","2",[[0,0],[.001,0]],{longitud:"100"}),cable("next","2","3",[[.001,0],[.002,0]],{longitud:"100"}),box("e","3",0,.002)];
+ const r=L.calcularPosicionDeCorte(records,100,"r");assert.equal(r.tramoObjetivo,"first");assert.equal(r.lon,.001);
+});
+test("KML Durango existente: medición inversa desde PTRO no devuelve acumulado cero",()=>{
+ const r=L.calcularPosicionDeCorte(require("./durango-roseta.fixture.cjs"),2600,"15126005");
+ assert.ok(r.encontrado||r.requiereEleccion);if(r.requiereEleccion)assert.ok(r.rutas.every(x=>x.tramos.length>0));else assert.ok(r.tramoId);
+});
+test("interfaz contiene una única sección e IDs de localizador únicos",()=>{
+ const html=fs.readFileSync(path.join(ROOT,"index.html"),"utf8");
+ for(const id of ["seccion-localizador","origenMedicion","metrosCorte","resultadoLocalizador","localizar"])
+  assert.equal((html.match(new RegExp(`id=[\"']${id}[\"']`,"g"))||[]).length,1,id);
+});

@@ -611,7 +611,11 @@ throw Error("Formato no compatible.");
 }
 
 registros=deduplicarRegistros(registros);
-pintar();
+// 1. Guardamos globalmente POR SI ACASO (para el hook antiguo)
+window.registros = registros;
+
+// 2. Y le pasamos los datos DIRECTAMENTE a pintar (la forma correcta)
+pintar(registros);
 $("csv").disabled=!registros.length;
 
 estado(

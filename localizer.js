@@ -1,215 +1,48 @@
-/* ================= LOCALIZADOR DE CORTES =================
-   Elige un elemento "Origen de Medicion" y calcula donde cae un corte a X
-   metros DESDE ese origen, recorriendo la cadena por ordenTramo.
-   Motor puro (sin DOM): calcularPosicionDeCorte y detectarRaices.
-*/
-
+/* Localizador de cortes por conectividad de cable. */
 const SLACK_EQUIPO=5;
-
-function _num(v){
-if(v==null)return 0;
-const m=String(v).replace(",",".").match(/-?\d+(\.\d+)?/);
-return m?Number(m[0]):0;
-}
-
+function _num(v){if(v==null||v==="")return NaN;const n=Number(String(v).replace(",","."));return Number.isFinite(n)?n:NaN;}
 function _rad(a){return a*Math.PI/180;}
+function _haversineM(a,b){const R=6371000,dLat=_rad(b.lat-a.lat),dLon=_rad(b.lon-a.lon),la1=_rad(a.lat),la2=_rad(b.lat),h=Math.sin(dLat/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.min(1,Math.sqrt(h)));}
+function _geom(e){return Array.isArray(e.vertices)&&e.vertices.length?e.vertices:(e.lat!=null&&e.lon!=null?[{lat:e.lat,lon:e.lon}]:[]);}
+function _geomLen(v){let d=0;for(let i=1;i<v.length;i++)d+=_haversineM({lat:+v[i-1].lat,lon:+v[i-1].lon},{lat:+v[i].lat,lon:+v[i].lon});return d;}
+function _txt(e){return String(e.nombreElemento||e.name||e.id||"");}
+function _isLine(e){return e.esLinea===true||/TRANSMEDIA|CABLE|FO:/i.test(String(e.elementType||e.tipo||""))||e.esLinea===undefined&&e.esEquipo===false;}
+function _id(s){const m=String(s||"").match(/\(\s*ID\s+(\d+)\s*\)/i);return m?m[1]:"";}
+function _endpointIds(e){return[_id(e.estructuraInicio),_id(e.estructuraFinal)];}
+function _coordEnds(e){const v=_geom(e);return v.length?[v[0],v[v.length-1]]:[];}
+function _samePoint(a,b){return a&&b&&_haversineM({lat:+a.lat,lon:+a.lon},{lat:+b.lat,lon:+b.lon})<=2;}
+function _edgeLength(e){const l=_num(e.longitud);if(l>0)return{length:l,source:"longitud"};const g=_geomLen(_geom(e));return{length:g,source:"geometría"};}
+function _interpolar(vertices,fraccion,reverse=false){if(!vertices||!vertices.length)return null;const v=reverse?vertices.slice().reverse():vertices;if(v.length===1||fraccion<=0)return{lat:+v[0].lat,lon:+v[0].lon};let lengths=[],total=0;for(let i=1;i<v.length;i++){const d=_haversineM({lat:+v[i-1].lat,lon:+v[i-1].lon},{lat:+v[i].lat,lon:+v[i].lon});lengths.push(d);total+=d;}if(!total)return{lat:+v[0].lat,lon:+v[0].lon};let d=fraccion*total;for(let i=0;i<lengths.length;i++){if(d<=lengths[i]||i===lengths.length-1){const f=lengths[i]?Math.min(1,d/lengths[i]):0;return{lat:+v[i].lat+(+v[i+1].lat-+v[i].lat)*f,lon:+v[i].lon+(+v[i+1].lon-+v[i].lon)*f};}d-=lengths[i];}return{lat:+v.at(-1).lat,lon:+v.at(-1).lon};}
 
-function _haversineM(a,b){
-const R=6371000;
-const dLat=_rad(b.lat-a.lat),dLon=_rad(b.lon-a.lon);
-const la1=_rad(a.lat),la2=_rad(b.lat);
-const h=Math.sin(dLat/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)**2;
-return 2*R*Math.asin(Math.min(1,Math.sqrt(h)));
+function _buildGraph(records){
+ const edges=records.filter(_isLine).map((e,index)=>{const ids=_endpointIds(e),ends=_coordEnds(e);return{e,index,a:ids[0]||"",b:ids[1]||"",ends};});
+ // Geometry can supply missing structure IDs; use endpoint clusters, never orderTramo.
+ const nodes=new Map(),coords=[];const node=(id,point)=>{let found=id&&nodes.has("id:"+id)?nodes.get("id:"+id):(point?coords.find(n=>_samePoint(n.point,point)):null);if(!found){found={key:id?"id:"+id:"geo:"+coords.length,edges:[],point:point||null};nodes.set(found.key,found);if(point)coords.push(found);}else if(point&&!found.point){found.point=point;if(!coords.includes(found))coords.push(found);}if(id)nodes.set("id:"+id,found);return found;};
+ for(const edge of edges){edge.na=node(edge.a,edge.ends[0]);edge.nb=node(edge.b,edge.ends[1]);if(edge.na){edge.na.edges.push({edge,forward:true});}if(edge.nb&&edge.nb!==edge.na){edge.nb.edges.push({edge,forward:false});}}
+ return{edges,nodes};
 }
-
-function _longGeom(vertices){
-let d=0;
-for(let i=1;i<vertices.length;i++)
-d+=_haversineM({lat:+vertices[i-1].lat,lon:+vertices[i-1].lon},{lat:+vertices[i].lat,lon:+vertices[i].lon});
-return d;
+function _originNode(records,graph,id){const e=records.find(x=>String(x.id)===String(id));if(!e)return null;const ids=[String(e.id||""),..._endpointIds(e)].filter(Boolean);for(const eid of ids)if(graph.nodes.has("id:"+eid))return graph.nodes.get("id:"+eid);const point=_geom(e)[0];if(point)return[...graph.nodes.values()].find(n=>n.point&&_samePoint(n.point,point))||null;return null;}
+function _findRoutes(records,graph,start,maxDepth=80){const found=[],walk=(n,path,seen,depth)=>{if(depth>=maxDepth)return;let advanced=false;const available=n.edges.filter(inc=>!seen.has(inc.edge.index));const reserves=available.filter(inc=>inc.edge.na===inc.edge.nb);for(const inc of reserves.length?reserves:available){const ed=inc.edge,next=inc.forward?ed.nb:ed.na;if(!next)continue;advanced=true;const step={...inc,from:n,to:next};const p=[...path,step],nextSeen=new Set([...seen,ed.index]);const canContinue=next.edges.some(candidate=>!nextSeen.has(candidate.edge.index));if(canContinue)walk(next,p,nextSeen,depth+1);else found.push(p);}if(!advanced&&path.length)found.push(path);};walk(start,[],new Set(),0);return found;}
+function _distanceForPath(path,origin){const vals=path.map(s=>_num(s.edge.e.distancia)).filter(Number.isFinite);let trend=0;for(let i=1;i<vals.length;i++)if(Math.abs(vals[i]-vals[i-1])>1e-9){trend=vals[i]>vals[i-1]?1:-1;break;}return path.map((s,i)=>{const {edge}=s,e=edge.e,explicit=_num(e.distancia),declared=_num(e.longitud),geom=_geomLen(_geom(e));let neighborAccum=NaN;if(trend<0)neighborAccum=i+1<path.length?_num(path[i+1].edge.e.distancia):NaN;else neighborAccum=i>0?_num(path[i-1].edge.e.distancia):_num(origin&&origin.distancia);let length,source;if(Number.isFinite(explicit)&&Number.isFinite(neighborAccum)&&Math.abs(explicit-neighborAccum)>1e-9){length=Math.abs(explicit-neighborAccum);source="distancia acumulada";}else if(declared>0){length=declared;source="longitud";}else if(Number.isFinite(explicit)){length=Math.abs(explicit);source="distancia acumulada";}else if(geom>0){length=geom;source="geometría";}else{length=0;source="sin distancia";}return{...s,length,source,explicit};});}
+function calcularPosicionDeCorte(circuitoArray,metrosDesdeOrigen,idElementoOrigen,opcionRuta){
+ const records=(circuitoArray||[]).filter(Boolean),meters=Number(metrosDesdeOrigen);if(!Number.isFinite(meters)||meters<0)return{error:"Introduce una distancia válida (0 o superior)."};
+ const graph=_buildGraph(records),start=_originNode(records,graph,idElementoOrigen);if(!start)return{error:"Origen sin conexión de cable identificable.",idOrigen:idElementoOrigen};
+ let routes=_findRoutes(records,graph,start).filter(p=>p.length);if(!routes.length)return{error:"No hay una ruta de cable conectada desde el origen."};
+ // A fixed choice can be passed as a route index when the caller has already shown the alternatives.
+ if(Number.isInteger(opcionRuta)){if(!routes[opcionRuta])return{error:"La ruta elegida ya no está disponible."};routes=[routes[opcionRuta]];}
+ const originRecord=records.find(x=>String(x.id)===String(idElementoOrigen));const plausible=routes.map((p,routeIndex)=>({path:_distanceForPath(p,originRecord),routeIndex})).filter(x=>x.path.reduce((s,e)=>s+e.length,0)>=meters-1e-9);
+ if(!plausible.length){const longest=routes.map(p=>_distanceForPath(p,originRecord)).sort((a,b)=>b.reduce((s,e)=>s+e.length,0)-a.reduce((s,e)=>s+e.length,0))[0];return{encontrado:false,metros:meters,metrosAcumulados:longest.reduce((s,e)=>s+e.length,0),ruta:longest.map(x=>_txt(x.edge.e)),mensaje:"La distancia supera el recorrido conectado disponible."};}
+ // Parallel cables and branches are distinct; do not choose among equally plausible routes silently.
+ const routeKeys=new Set(plausible.map(x=>x.path.map(e=>String(e.edge.e.id||e.edge.index)).join(">")));
+ if(routeKeys.size>1&&opcionRuta==null)return{error:"Hay varias rutas plausibles. Elige una para calcular.",requiereEleccion:true,rutas:plausible.map(x=>({opcion:x.routeIndex,ruta:x.path.map(e=>_txt(e.edge.e)),tramos:x.path.map(e=>String(e.edge.e.id||""))}))};
+ const path=plausible[0].path;let accumulated=0;const routeNames=[];for(const s of path){const e=s.edge.e,portion=s.length;const name=_txt(e);routeNames.push(name+" ("+Math.round(portion)+" m)");if(meters<=accumulated+portion+1e-9){const f=portion?Math.max(0,Math.min(1,(meters-accumulated)/portion)):0;const point=_interpolar(_geom(e),f,!s.forward)||{lat:e.lat,lon:e.lon};return{encontrado:true,metros:meters,nombreOrigen:_txt(records.find(x=>String(x.id)===String(idElementoOrigen))||{}),idOrigen:idElementoOrigen,ordenTramo:e.orden,tramoId:e.id,tramoObjetivo:name,tramoNombre:name,tipo:"TRANSMEDIA",estructuraInicio:e.estructuraInicio||"",estructuraFinal:e.estructuraFinal||"",lat:point.lat,lon:point.lon,direccion:s.forward?"estructuraInicio → estructuraFinal":"estructuraFinal → estructuraInicio",fuenteDistancia:s.source,cajas:0,ruta:routeNames,distanciaReal:s.source==="distancia acumulada"};}accumulated+=portion;}
+ return{encontrado:false,metros:meters,metrosAcumulados:accumulated,ruta:routeNames};
 }
-
-function _txt(e){
-return ((e.nombreElemento||"")+" "+(e.name||"")+" "+(e.styleUrl||""));
-}
-
-function _esAereo(e){return /AER|AÉR|AERE/i.test(_txt(e));}
-function _esSubterraneo(e){return /CAN|SUBTER|SUB\b/i.test((e.nombreElemento||"")+" "+(e.name||""));}
-function _esEquipo(e){return !e.esLinea;}
-
-function _factorTortuosidad(longM,e){
-if(_esAereo(e))return 1.02;
-if(_esSubterraneo(e)){
-if(longM>500)return 1.15;
-if(longM>100)return 1.08;
-return 1.08;
-}
-return 1.02;
-}
-
-function _interpolar(vertices,fraccion){
-if(!vertices||!vertices.length)return null;
-if(vertices.length===1||fraccion<=0)return{lat:+vertices[0].lat,lon:+vertices[0].lon};
-const segs=[];let total=0;
-for(let i=1;i<vertices.length;i++){
-const d=_haversineM({lat:+vertices[i-1].lat,lon:+vertices[i-1].lon},{lat:+vertices[i].lat,lon:+vertices[i].lon});
-segs.push({a:i-1,b:i,d});total+=d;
-}
-if(total<=0)return{lat:+vertices[0].lat,lon:+vertices[0].lon};
-let obj=fraccion*total;
-for(const s of segs){
-if(obj<=s.d||s===segs[segs.length-1]){
-const f=s.d>0?Math.min(1,obj/s.d):0;
-const a=vertices[s.a],b=vertices[s.b];
-return{lat:+a.lat+(+b.lat-+a.lat)*f,lon:+a.lon+(+b.lon-+a.lon)*f};
-}
-obj-=s.d;
-}
-const l=vertices[vertices.length-1];
-return{lat:+l.lat,lon:+l.lon};
-}
-
-function calcularPosicionDeCorte(circuitoArray,metrosDesdeOrigen,idElementoOrigen){
-const lista=(circuitoArray||[]).filter(Boolean).slice();
-lista.sort((a,b)=>(_num(a.orden)||0)-(_num(b.orden)||0));
-const idx=lista.findIndex(e=>(e.id||"")===idElementoOrigen);
-if(idx<0)return{error:"Origen no encontrado en el circuito",idOrigen:idElementoOrigen};
-
-const camino=lista.slice(idx);
-const origen=camino[0];
-const nombreOrigen=origen.nombreElemento||origen.name||origen.id||"";
-const metros=Number(metrosDesdeOrigen)||0;
-
-// Distancia acumulada REAL al inicio de este paso. Cuando el KML trae
-// distanciaAcumulada es ground truth (medida); si no, se estima con
-// tortuosidad de cable + slack de cajas.
-const _daFin=e=>{
-if(e.distancia!==""&&e.distancia!=null&&Number.isFinite(_num(e.distancia)))return _num(e.distancia);
-const longDecl=_num(e.longitud);
-const baseL=longDecl>0?longDecl:_longGeom(e.vertices||[]);
-return _esEquipo(e)?SLACK_EQUIPO:baseL*_factorTortuosidad(baseL,e);
-};
-
-const base=_num(origen.distancia)||0;
-let prevAcum=base;
-const ruta=[nombreOrigen];
-let cajas=0;
-
-for(let k=0;k<camino.length;k++){
-const e=camino[k];
-let finAcum;
-if(e.distancia!==""&&e.distancia!=null&&Number.isFinite(_num(e.distancia))){
-finAcum=_num(e.distancia);
-}else{
-finAcum=prevAcum+_daFin(e);
-}
-if(finAcum<prevAcum)finAcum=prevAcum;
-
-const largo=finAcum-prevAcum;
-const inicioRel=prevAcum-base;
-const finRel=finAcum-base;
-
-if(_esEquipo(e)){
-if(k>0&&metros>inicioRel&&metros<=finRel+1e-9){
-return{encontrado:true,metros,nombreOrigen,idOrigen:idElementoOrigen,
-ordenTramo:e.orden,tramoId:e.id,tramoNombre:e.nombreElemento||e.name||"",tipo:"EQUIPMENT",
-estructuraInicio:e.estructuraInicio||"",estructuraFinal:e.estructuraFinal||"",
-lat:e.lat,lon:e.lon,cajas,ruta:ruta.slice()};
-}
-if(k>0){
-cajas++;
-ruta.push((e.nombreElemento||e.name||e.id||"")+" (caja)");
-}
-}else{
-if(metros>inicioRel&&metros<=finRel+1e-9){
-const frac=largo>0?Math.max(0,Math.min(1,(metros-inicioRel)/largo)):0;
-const p=_interpolar(e.vertices||[],frac)||{lat:e.lat,lon:e.lon};
-return{encontrado:true,metros,nombreOrigen,idOrigen:idElementoOrigen,
-ordenTramo:e.orden,tramoId:e.id,tramoNombre:e.nombreElemento||e.name||"",tipo:"TRANSMEDIA",
-estructuraInicio:e.estructuraInicio||"",estructuraFinal:e.estructuraFinal||"",
-lat:p.lat,lon:p.lon,cajas,distanciaReal:Number.isFinite(_num(e.distancia)),ruta:ruta.slice()};
-}
-ruta.push((e.nombreElemento||e.name||e.id||"")+" ("+Math.round(largo)+" m)");
-}
-prevAcum=finAcum;
-}
-
-return{encontrado:false,metros,nombreOrigen,idOrigen:idElementoOrigen,
-metrosAcumulados:prevAcum-base,cajas,mensaje:"La distancia supera el circuito desde el origen.",ruta:ruta.slice()};
-}
-
-function detectarRaices(circuitoArray){
-const lista=(circuitoArray||[]).filter(Boolean).slice();
-lista.sort((a,b)=>(_num(a.orden)||0)-(_num(b.orden)||0));
-const equipos=lista.filter(_esEquipo);
-const esRaizNombre=e=>{
-const t=(e.nombreElemento||"")+" "+(e.name||"");
-return /(^|[^A-Za-z])(CT|CENTRAL|CABECERA)/i.test(t)||/REP[_ ]?F|REP\b/i.test(t);
-};
-const porNombre=equipos.filter(esRaizNombre);
-const raiz=porNombre[0]||equipos[0]||null;
-const _opt=e=>({id:e.id,nombre:e.nombreElemento||e.name||e.id,orden:e.orden});
-return{
-raices:porNombre.map(_opt),
-porDefecto:raiz?raiz.id:"",
-opciones:equipos.map(_opt)
-};
-}
-
-/* ================= UI DEL LOCALIZADOR ================= */
-
+function detectarRaices(circuitoArray){const list=(circuitoArray||[]).filter(e=>!_isLine(e));const roots=list.filter(e=>/(^|[^A-Z])(CT|CENTRAL|CABECERA)\b|\bRO\s*0?1\b|\bRO\s*ZALL/i.test(_txt(e)+" "+String(e.estructuraInicio||"")));const opts=list.map(e=>({id:e.id,nombre:_txt(e),orden:e.orden}));return{raices:roots.map(e=>({id:e.id,nombre:_txt(e),orden:e.orden})),porDefecto:(roots[0]||list[0]||{}).id||"",opciones:opts};}
+function poblarOrigenes(circuitoArray){_circuitoLocalizador=(circuitoArray||[]).filter(Boolean);const sel=$("origenMedicion");if(!sel)return;const info=detectarRaices(_circuitoLocalizador);sel.innerHTML=info.opciones.map(o=>'<option value="'+escapar(String(o.id))+'">'+escapar(o.nombre)+(info.opciones.length>1?' ('+escapar(String(o.id))+')':'')+'</option>').join("");if(info.porDefecto)sel.value=info.porDefecto;}
 let _circuitoLocalizador=[];
-
-function poblarOrigenes(circuitoArray){
-_circuitoLocalizador=(circuitoArray||[]).filter(Boolean);
-const sel=$("origenMedicion");
-if(!sel)return;
-const info=detectarRaices(_circuitoLocalizador);
-const opciones=info.opciones.length?info.opciones:info.raices;
-sel.innerHTML=opciones.map(o=>
-'<option value="'+escapar(String(o.id))+'">'+escapar(o.nombre)+
-(opciones.length>1?' (orden '+escapar(String(o.orden))+')':'')+'</option>').join("");
-if(info.porDefecto)sel.value=info.porDefecto;
-}
-
-function calcularLocalizador(){
-const metros=Number(($("metrosCorte")||{}).value||0);
-const idOrigen=($("origenMedicion")||{}).value||"";
-const caja=$("resultadoLocalizador");
-if(!caja)return;
-if(!_circuitoLocalizador.length||!idOrigen){
-caja.innerHTML='<div class="estado">Primero extrae un circuito para localizar.</div>';
-return;
-}
-renderizarLocalizador(calcularPosicionDeCorte(_circuitoLocalizador,metros,idOrigen));
-}
-
-function renderizarLocalizador(r){
-const caja=$("resultadoLocalizador");
-if(!caja)return;
-if(!r){caja.innerHTML="";return;}
-if(r.error){caja.innerHTML='<div class="estado error">'+escapar(r.error)+'</div>';return;}
-if(!r.encontrado){
-caja.innerHTML='<div class="estado">La distancia ('+escapar(String(r.metros))+
-' m) supera el circuito. Acumulado: '+escapar(String(Math.round(r.metrosAcumulados||0)))+' m.</div>';
-return;
-}
-const maps=enlaceMaps(r.lat,r.lon);
-const rutaHtml=(r.ruta||[]).map(x=>'<li>'+escapar(x)+'</li>').join("");
-caja.innerHTML=
-'<div class="resumen">'+
-'<div class="indicador">📍 Corte estimado a <strong>'+escapar(String(r.metros))+
-'</strong> m desde <strong>'+escapar(r.nombreOrigen)+'</strong></div>'+
-'</div>'+
-'<div>Ubicación: Tramo '+escapar(String(r.ordenTramo))+' ('+escapar(r.tipo)+
-'), entre '+escapar(r.estructuraInicio||"—")+' y '+escapar(r.estructuraFinal||"—")+'</div>'+
-'<div class="coordenadas">Coordenadas: '+escapar(String(r.lat))+', '+escapar(String(r.lon))+
-(maps?' <a class="btn-maps" target="_blank" href="'+escapar(maps)+'">Abrir en Maps</a>':'')+'</div>'+
-'<div>Ruta seguida:<ul>'+rutaHtml+'</ul></div>';
-}
-
-function inicializarLocalizador(){
-const btn=$("localizar");
-if(btn&&!btn.__loc){btn.addEventListener("click",calcularLocalizador);btn.__loc=true;}
-}
-
+function calcularLocalizador(){const metros=Number(($("metrosCorte")||{}).value),id=$("origenMedicion")?.value||"",out=$("resultadoLocalizador");if(!out)return;renderizarLocalizador(calcularPosicionDeCorte(_circuitoLocalizador,metros,id));}
+function renderizarLocalizador(r){const out=$("resultadoLocalizador");if(!out||!r)return;if(r.error){out.innerHTML='<div class="estado error">'+escapar(r.error)+(r.rutas?'<ol>'+r.rutas.map(x=>'<li><button type="button" data-route="'+x.opcion+'">'+escapar(x.ruta.join(' → '))+'</button></li>').join('')+'</ol>':'')+'</div>';if(r.rutas)out.querySelectorAll('[data-route]').forEach(b=>b.addEventListener('click',()=>renderizarLocalizador(calcularPosicionDeCorte(_circuitoLocalizador,Number(($('metrosCorte')||{}).value),$('origenMedicion').value,Number(b.dataset.route)))));return;}if(!r.encontrado){out.textContent='La distancia supera el recorrido disponible: '+Math.round(r.metrosAcumulados||0)+' m.';return;}const maps=enlaceMaps(r.lat,r.lon);out.innerHTML='<div>📍 Corte a <strong>'+escapar(String(r.metros))+' m</strong> desde <strong>'+escapar(r.nombreOrigen)+'</strong></div><div>Tramo objetivo: '+escapar(r.tramoObjetivo)+' ('+escapar(String(r.tramoId))+')</div><div>Dirección: '+escapar(r.direccion)+'</div><div class="coordenadas">Coordenadas: '+escapar(String(r.lat))+', '+escapar(String(r.lon))+(maps?' <a class="btn-maps" target="_blank" rel="noopener noreferrer" href="'+escapar(maps)+'">Abrir ubicación en Maps</a>':'')+'</div><div>Ruta seguida:<ol>'+r.ruta.map(x=>'<li>'+escapar(x)+'</li>').join('')+'</ol></div>';}
+function inicializarLocalizador(){const btn=$("localizar");if(btn&&!btn.__loc){btn.addEventListener("click",calcularLocalizador);btn.__loc=true;}}
+function buscarCorte(){calcularLocalizador();}
+if(typeof window!=="undefined")window.buscarCorte=buscarCorte;

@@ -112,7 +112,7 @@ function makeElement(id) {
 
 function loadApp({ pdfjsLib, JSZip, location, launchQueue, indexedDB } = {}) {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-  const source = ["app-core.js", "app-kml.js", "app-pdf.js", "app-processing.js", "app-ui.js", "app-share.js"]
+  const source = ["app-core.js", "app-kml.js", "app-pdf.js", "app-processing.js", "app-ui.js", "app-share.js", "localizer.js"]
     .map(file => fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n");
   if (!source.trim()) throw new Error("Application script is empty");
 
@@ -188,7 +188,7 @@ function loadApp({ pdfjsLib, JSZip, location, launchQueue, indexedDB } = {}) {
     "campoCSV", "descargarCSV", "procesarArchivoCompartido",
     "formatearDiagnosticoRecepcion", "recuperarArchivoCompartido",
     "borrarArchivoCompartido", "instalarRecepcionAndroid",
-    "iniciarRecuperacionCompartida"
+    "iniciarRecuperacionCompartida", "calcularPosicionDeCorte", "detectarRaices", "poblarOrigenes"
   ];
   const instrumented = source +
     `\nglobalThis.__api={${exported.join(",")},getState:()=>({registros,elementosPDF,textoOriginal,eliminados,archivoCompartido}),setState:(v={})=>{if(v.registros!==undefined)registros=v.registros;if(v.elementosPDF!==undefined)elementosPDF=v.elementosPDF;if(v.eliminados!==undefined)eliminados=v.eliminados;}};`;
