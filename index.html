@@ -7,7 +7,7 @@
 <meta name="description" content="Trace a Circuit — análisis de redes de fibra y localización de cortes desde archivos PDF, KML y KMZ.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<title>Trace a Circuit | Análisis de redes</title>
+<title>Trace Circuit | Análisis de redes</title>
 
 <script>
 if("serviceWorker" in navigator){
@@ -26,6 +26,9 @@ body{margin:0;background:var(--fondo);color:#20343d;font-family:Inter,"Segoe UI"
 header{background:linear-gradient(125deg,#123b52,#087e8b);color:white;padding:30px 32px;border-radius:18px;margin-bottom:20px;box-shadow:0 12px 28px #123b5226}
 header h1{margin:0 0 8px;font-size:clamp(25px,4vw,36px);letter-spacing:-.035em}
 header p{margin:0;opacity:.9}
+.cabecera-marca{display:flex;align-items:center;gap:12px}
+.marca-icono{display:grid;place-items:center;width:42px;height:42px;border:1px solid #ffffff55;border-radius:12px;background:#ffffff16;font-size:21px}
+.busqueda-ayuda{font-size:12px;color:#637083}
 .tarjeta{background:white;border:1px solid var(--borde);border-radius:15px;padding:22px;margin-bottom:18px;box-shadow:0 5px 18px #123b520b}
 h2{margin-top:0;color:var(--oscuro)}
 .formulario{display:grid;grid-template-columns:1fr 1fr;gap:15px}
@@ -68,6 +71,26 @@ tr:nth-child(even){background:#f8faff}
 .etiqueta-cable{min-width:320px;max-width:480px;white-space:pre-wrap;font-family:monospace;color:var(--azul)}
 pre{max-height:320px;overflow:auto;padding:14px;border-radius:7px;color:#d0d5dd;background:#101828;font-size:11px;white-space:pre-wrap}
 .diagnostico{font-size:13px;color:#526175}
+.pantalla-carga{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:#092738e8;backdrop-filter:blur(8px)}
+.pantalla-carga[hidden]{display:none}
+.carga-panel{width:min(440px,100%);padding:28px 24px;text-align:center;color:#e9f7f8;background:linear-gradient(155deg,#153f52,#0d2938);border:1px solid #ffffff24;border-radius:22px;box-shadow:0 24px 80px #0007}
+.carga-kicker{margin:0;color:#76d8d5;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase}
+.carga-panel h2{margin:8px 0 5px;color:white;font-size:23px}
+.carga-archivo{margin:0;color:#c2d7dc;font-size:13px;overflow-wrap:anywhere}
+.fusion-escena{position:relative;width:250px;height:130px;margin:18px auto 12px}
+.fibra{position:absolute;top:64px;width:93px;height:4px;border-radius:4px;background:linear-gradient(90deg,#46d9ea,#a9ffff)}
+.fibra::after{content:"";position:absolute;inset:-5px 0;background:linear-gradient(90deg,transparent,#9fffff,transparent);filter:blur(5px);animation:flujo-fibra 1.3s linear infinite}
+.fibra-izquierda{left:5px}.fibra-derecha{right:5px;transform:scaleX(-1)}
+.fusionadora{position:absolute;left:91px;top:31px;width:68px;height:68px;display:grid;place-items:center;border:2px solid #70dce4;border-radius:17px;background:linear-gradient(145deg,#23677a,#102f42);box-shadow:0 0 24px #3ce8ed55;animation:pulso-fusion 1.5s ease-in-out infinite}
+.fusionadora svg{width:42px;height:42px;stroke:#d4ffff;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.nucleo-fusion{position:absolute;left:121px;top:61px;width:8px;height:8px;border-radius:50%;background:#fff;box-shadow:0 0 8px 3px #81ffff,0 0 22px 8px #27e3f4;animation:destello-fusion 1.1s ease-in-out infinite}
+.carga-pasos{display:flex;justify-content:center;gap:7px;margin-top:17px}
+.carga-pasos i{width:7px;height:7px;border-radius:50%;background:#57d6d8;animation:paso-fusion 1.1s ease-in-out infinite}.carga-pasos i:nth-child(2){animation-delay:.16s}.carga-pasos i:nth-child(3){animation-delay:.32s}
+@keyframes flujo-fibra{from{transform:translateX(-30%);opacity:.3}50%{opacity:1}to{transform:translateX(30%);opacity:.3}}
+@keyframes pulso-fusion{50%{transform:scale(1.06);box-shadow:0 0 34px #3ce8ed88}}
+@keyframes destello-fusion{50%{opacity:.35;transform:scale(.7)}}
+@keyframes paso-fusion{50%{opacity:.25;transform:translateY(-4px)}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
 @media(max-width:800px){.formulario{grid-template-columns:1fr}.contenedor{padding:12px}header{padding:24px 20px;border-radius:14px}.tarjeta{padding:17px;border-radius:12px}}
 </style>
 </head>
@@ -76,9 +99,23 @@ pre{max-height:320px;overflow:auto;padding:14px;border-radius:7px;color:#d0d5dd;
 <div class="contenedor">
 
 <header>
-<h1>Trace a Circuit</h1>
+<div class="cabecera-marca"><span class="marca-icono" aria-hidden="true">⌁</span><div><h1>Trace Circuit</h1>
 <p>Análisis de redes de fibra · localización de cortes · coordenadas y Google Maps</p>
+</div></div>
 </header>
+
+<div id="pantallaCarga" class="pantalla-carga" role="status" aria-live="polite" aria-label="Analizando archivo" hidden>
+<div class="carga-panel">
+<p class="carga-kicker">Trace Circuit · análisis de red</p>
+<div class="fusion-escena" aria-hidden="true">
+<span class="fibra fibra-izquierda"></span><span class="fibra fibra-derecha"></span>
+<div class="fusionadora"><svg viewBox="0 0 48 48"><path d="M8 15h12l4 5 4-5h12M8 33h12l4-5 4 5h12M20 15v18m8-18v18"/><path d="M4 11v26m40-26v26" opacity=".55"/></svg></div><span class="nucleo-fusion"></span>
+</div>
+<h2>Fusionando la ruta de fibra</h2>
+<p id="cargaArchivo" class="carga-archivo">Preparando el archivo…</p>
+<div class="carga-pasos" aria-hidden="true"><i></i><i></i><i></i></div>
+</div>
+</div>
 
 <section class="tarjeta" id="recepcionCompartir" hidden>
 <h2>📥 Archivo recibido</h2>
@@ -98,9 +135,9 @@ accept=".pdf,.kml,.kmz,application/pdf,application/vnd.google-earth.kml+xml,appl
 
 <div class="formulario" style="margin-top:17px">
 <div class="campo">
-<label for="ctos">CTO / EMP</label>
-<input id="ctos" type="text" placeholder="Ejemplo: 22070, E8548">
-<span class="ayuda">Busca cualquier elemento por nombre o ID. Separa varios con comas o espacios.</span>
+<label for="ctos">Buscar elemento</label>
+<input id="ctos" type="text" placeholder="CTO, EMP, RO, CT, PTRO o Nº">
+<span class="ayuda">Busca por tipo, nombre o ID. Separa varios términos con comas o espacios.</span>
 </div>
 
 <div class="campo">
@@ -154,7 +191,8 @@ accept=".pdf,.kml,.kmz,application/pdf,application/vnd.google-earth.kml+xml,appl
 <div class="campo">
 <label for="origenMedicion">Origen de Medición</label>
 <select id="origenMedicion"><option value="">— extrae un circuito —</option></select>
-<span class="ayuda">Raíz desde la que se mide (p. ej. CT DURANGO).</span>
+<input id="buscarOrigen" type="search" placeholder="Buscar CTO, EMP, RO, CT, PTRO o Nº" aria-label="Buscar origen de medición">
+<span class="ayuda">Filtra los orígenes disponibles por tipo, nombre o ID.</span>
 </div>
 <div class="campo">
 <label for="metrosCorte">Metros desde el origen</label>
@@ -166,12 +204,6 @@ accept=".pdf,.kml,.kmz,application/pdf,application/vnd.google-earth.kml+xml,appl
 <button id="localizar" class="btn-principal">Calcular corte</button>
 </div>
 <div id="resultadoLocalizador"></div>
-</section>
-
-<section class="tarjeta">
-<h2>Archivo analizado</h2>
-<a id="verArchivo" class="btn-maps" href="#" target="_blank" rel="noopener noreferrer" hidden>Ver archivo</a>
-<pre id="texto" hidden>No hay datos cargados.</pre>
 </section>
 
 </div>

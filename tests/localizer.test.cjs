@@ -56,8 +56,10 @@ test("KML Durango existente: medición inversa desde PTRO no devuelve acumulado 
 });
 test("interfaz contiene una única sección e IDs de localizador únicos",()=>{
  const html=fs.readFileSync(path.join(ROOT,"index.html"),"utf8");
- for(const id of ["seccion-localizador","origenMedicion","metrosCorte","resultadoLocalizador","localizar","verArchivo","texto"])
+ for(const id of ["seccion-localizador","origenMedicion","buscarOrigen","metrosCorte","resultadoLocalizador","localizar","pantallaCarga","cargaArchivo"])
   assert.equal((html.match(new RegExp(`id=[\"']${id}[\"']`,"g"))||[]).length,1,id);
+ assert.doesNotMatch(html,/id=[\"']verArchivo[\"']/);
+ assert.match(html,/Fusionando la ruta de fibra/);
 });
 
 test("descuenta 13% a la medición de campo y conserva ambos valores en el resultado",()=>{
@@ -90,6 +92,11 @@ test("orígenes solo ofrece CTO, EMP, N, CT y RO; excluye cables, coordenadas y 
  const visibleOptions=app.document.getElementById("origenMedicion").innerHTML;
  assert.match(visibleOptions,/value="cto-project"/);assert.match(visibleOptions,/value="emp-project"/);
  assert.doesNotMatch(visibleOptions,/value="cto"/);
+ app.document.getElementById("buscarOrigen").value="PTRO";
+ api.filtrarOrigenes();
+ const opcionesFiltradas=app.document.getElementById("origenMedicion").innerHTML;
+ assert.match(opcionesFiltradas,/PTRO 63 ROSETA/);
+ assert.doesNotMatch(opcionesFiltradas,/E-19224 DIVICAU/);
 });
 
 test("elementos de proyecto y PTRO sin ID se pueden medir en ambos sentidos usando geometría",()=>{
@@ -110,19 +117,18 @@ test("elementos de proyecto y PTRO sin ID se pueden medir en ambos sentidos usan
  assert.equal(reverse.encontrado,true);assert.equal(reverse.nombreOrigen,"PTRO 63 ROSETA");assert.equal(reverse.tramoId,"wire");assert.ok(Math.abs(reverse.lon-.0005)<1e-8);
 });
 
-test("el enlace Ver archivo conserva los bytes originales y asigna el MIME correcto",async()=>{
+test("vista Trace Circuit muestra la fusión durante la carga y ya no ofrece Ver archivo",async()=>{
  const app=loadApp(),{html}=app;
- assert.match(html,/id="verArchivo"[^>]*hidden/);
- assert.match(html,/id="texto" hidden/);
- assert.doesNotMatch(html,/<summary>[^<]*(?:texto|XML|datos técnicos)/i);
- const xml="<kml><Document><name>original</name></Document></kml>";
- const archivo=new (require("node:buffer").File)([xml],"red.kml",{type:"application/vnd.google-earth.kml+xml"});
- app.api.mostrarEnlaceArchivo(archivo);
- const enlace=app.document.getElementById("verArchivo");
- assert.equal(enlace.hidden,false);assert.equal(enlace.textContent,"Ver archivo: red.kml");assert.equal(enlace.href,"blob:characterization");assert.equal(enlace.download,undefined);
- assert.equal(app.objectUrls.at(-1).type,"text/xml;charset=utf-8");assert.equal(await app.objectUrls.at(-1).text(),xml);
- const pdf=new (require("node:buffer").File)(["%PDF"],"plano.pdf",{type:"application/octet-stream"});
- app.api.mostrarEnlaceArchivo(pdf);assert.equal(app.objectUrls.at(-1).type,"application/pdf");assert.equal(await app.objectUrls.at(-1).text(),"%PDF");
- const kmz=new (require("node:buffer").File)(["PK-original"],"red.kmz",{type:"application/octet-stream"});
- app.api.mostrarEnlaceArchivo(kmz);assert.equal(app.objectUrls.at(-1).type,"application/vnd.google-earth.kmz");assert.equal(await app.objectUrls.at(-1).text(),"PK-original");
+ assert.match(html,/<title>Trace Circuit \| Análisis de redes<\/title>/);
+ assert.match(html,/class="fusion-escena"/);
+ assert.match(html,/prefers-reduced-motion/);
+ assert.doesNotMatch(html,/id=[\"']verArchivo[\"']/);
+ const pantalla=app.document.getElementById("pantallaCarga");
+ app.document.getElementById("archivo").files=[{name:"red.kml",text:async()=>{
+  assert.equal(pantalla.hidden,false,"la pantalla de fusión debe estar visible mientras se lee el archivo");
+  assert.equal(app.document.getElementById("cargaArchivo").textContent,"red.kml");
+  return "<kml><Document></Document></kml>";
+ }}];
+ await app.api.extraer();
+ assert.equal(pantalla.hidden,true,"la pantalla de fusión se oculta al terminar");
 });

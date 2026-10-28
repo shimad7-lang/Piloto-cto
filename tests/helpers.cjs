@@ -178,6 +178,10 @@ function loadApp({ pdfjsLib, JSZip, location, launchQueue, indexedDB } = {}) {
     setTimeout(callback) {
       return 1;
     },
+    requestAnimationFrame(callback) {
+      callback();
+      return 1;
+    },
     clearTimeout() {}
   };
 
@@ -188,9 +192,9 @@ function loadApp({ pdfjsLib, JSZip, location, launchQueue, indexedDB } = {}) {
     "dedupCables", "leerPDF", "analizarPDF", "registroKML", "registroPDF",
     "claveRegistro", "deduplicarRegistros", "extraer", "pintar", "copiarTexto",
     "campoCSV", "descargarCSV", "procesarArchivoCompartido",
-    "formatearDiagnosticoRecepcion", "recuperarArchivoCompartido", "mostrarEnlaceArchivo",
+    "formatearDiagnosticoRecepcion", "recuperarArchivoCompartido",
     "borrarArchivoCompartido", "instalarRecepcionAndroid",
-    "iniciarRecuperacionCompartida", "calcularPosicionDeCorte", "detectarRaices", "poblarOrigenes"
+    "iniciarRecuperacionCompartida", "calcularPosicionDeCorte", "detectarRaices", "poblarOrigenes", "filtrarOrigenes"
   ];
   const instrumented = source +
     `\nglobalThis.__api={${exported.join(",")},getState:()=>({registros,elementosPDF,textoOriginal,eliminados,archivoCompartido}),setState:(v={})=>{if(v.registros!==undefined)registros=v.registros;if(v.elementosPDF!==undefined)elementosPDF=v.elementosPDF;if(v.eliminados!==undefined)eliminados=v.eliminados;}};`;

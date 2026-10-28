@@ -471,22 +471,9 @@ eliminados++;
 return [...mapa.values()];
 }
 
-let urlArchivoAnalizado="";
-let urlsArchivoAnalizado=[];
-function mostrarEnlaceArchivo(archivo){
-const enlace=$("verArchivo");
-if(!enlace||!archivo||typeof URL.createObjectURL!=="function")return;
-for(const url of urlsArchivoAnalizado)URL.revokeObjectURL(url);
-urlsArchivoAnalizado=[];
-const nombre=String(archivo.name||"archivo analizado"),extension=nombre.toLowerCase().split(".").pop();
-const tipo={pdf:"application/pdf",kml:"text/xml;charset=utf-8",kmz:"application/vnd.google-earth.kmz"}[extension]||archivo.type||"application/octet-stream";
-const vista=typeof File==="function"?new File([archivo],nombre,{type:tipo}):new Blob([archivo],{type:tipo});
-urlArchivoAnalizado=URL.createObjectURL(vista);
-urlsArchivoAnalizado.push(urlArchivoAnalizado);
-enlace.href=urlArchivoAnalizado;
-enlace.textContent="Ver archivo: "+String(archivo.name||"archivo analizado");
-enlace.hidden=false;
-}
+function mostrarPantallaCarga(nombre){const pantalla=$("pantallaCarga");if(!pantalla)return;const archivo=$("cargaArchivo");if(archivo)archivo.textContent=nombre||"Preparando el archivo…";pantalla.hidden=false;}
+function ocultarPantallaCarga(){const pantalla=$("pantallaCarga");if(pantalla)pantalla.hidden=true;}
+function esperarPintado(){return new Promise(resolve=>{if(typeof requestAnimationFrame==="function")requestAnimationFrame(()=>resolve());else setTimeout(resolve,16);});}
 
 async function extraer(){
 const archivo=$("archivo").files[0];
@@ -496,6 +483,8 @@ estado("Selecciona primero un archivo.","error");
 return;
 }
 
+mostrarPantallaCarga(archivo.name);
+await esperarPintado();
 registros=[];
 elementosPDF=[];
 eliminados=0;
@@ -503,14 +492,12 @@ eliminados=0;
 try{
 estado("Procesando "+archivo.name+"...");
 $("diagnostico").textContent="";
-$("texto").textContent="Procesando...";
 
 const nombre=archivo.name.toLowerCase();
 
 if(nombre.endsWith(".kml")||nombre.endsWith(".kmz")){
 const xml=await leerKMLKMZ(archivo);
 textoOriginal=xml;
-$("texto").textContent=xml;
 
 const esKMZ=nombre.endsWith(".kmz");
 const datosKML=analizarKML(xml);
@@ -518,6 +505,7 @@ const datos=esKMZ?clasificarElementosKMZ(xml,datosKML):datosKML;
 
 const filtros=lista($("ctos").value);
 const filtroEmpalme=limpiarTexto($("empalme").value);
+const coincideBusqueda=e=>{const numero=numeroCTO(e.nombreElemento||e.name,e.id),texto=normalizar([e.id,e.name,e.nombreElemento].join(" "));return filtros.some(filtro=>filtro===numero||filtro===e.id||texto.includes(normalizar(filtro)));};
 
 const empalmesRelacionados=datos.empalmes.filter(empalme=>
 empalmeRelacionadoConCTO(empalme,datos.ctos)
@@ -584,7 +572,11 @@ registros.push(...registroKML(elemento,datos,filtroEmpalme,esKMZ));
 if(typeof poblarOrigenes==="function"){
 const idsResultados=new Set(registros.map(r=>String(r.idElemento||r.idEmpalme||"")).filter(Boolean));
 const nombresResultados=new Set(registros.map(r=>normalizar(r.elemento||r.nombreCto||r.nombreEmpalme||"")).filter(Boolean));
-const origenesVisibles=datos.elementos.filter(e=>idsResultados.has(String(e.id||""))||nombresResultados.has(normalizar(e.nombreElemento||e.name||e.id||"")));
+datos.elementos.forEach((e,i)=>{if(!e.id)e.__localizerKey="localizer:"+i;});
+const idsOrigen=typeof detectarRaices==="function"?new Set(detectarRaices(datos.elementos).opciones.map(o=>String(o.id))):new Set();
+const coincideOrigenBusqueda=e=>!filtros.length||coincideBusqueda(e);
+const origenesCoincidentes=datos.elementos.filter(e=>idsOrigen.has(String(e.id||e.__localizerKey||""))&&coincideOrigenBusqueda(e));
+const origenesVisibles=[...new Set([...datos.elementos.filter(e=>idsResultados.has(String(e.id||""))||nombresResultados.has(normalizar(e.nombreElemento||e.name||e.id||""))),...origenesCoincidentes])];
 poblarOrigenes(datos.elementos,origenesVisibles);
 if(typeof inicializarLocalizador==="function")inicializarLocalizador();
 }
@@ -603,7 +595,6 @@ if(typeof poblarOrigenes==="function")poblarOrigenes([],[]);
 const paginas=await leerPDF(archivo);
 const texto=paginas.map(pagina=>pagina.map(item=>item.str||"").join("\n")).join("\n");
 textoOriginal=texto;
-$("texto").textContent=texto;
 
 elementosPDF=analizarPDF(paginas);
 const filtros=lista($("ctos").value);
@@ -633,7 +624,6 @@ throw Error("Formato no compatible.");
 }
 
 registros=deduplicarRegistros(registros);
-mostrarEnlaceArchivo(archivo);
 // 1. Guardamos globalmente POR SI ACASO (para el hook antiguo)
 window.registros = registros;
 
@@ -652,5 +642,7 @@ registros.length?"ok":"error"
 console.error(e);
 estado("Error procesando el archivo: "+e.message,"error");
 $("csv").disabled=true;
+}finally{
+ocultarPantallaCarga();
 }
 }
