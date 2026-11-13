@@ -3,12 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#123b52">
-<meta name="description" content="Trace a Circuit — análisis de redes de fibra y localización de cortes desde archivos PDF, KML y KMZ.">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<title>Trace Circuit | Análisis de redes</title>
 
+<meta name="description" content="Trace a Circuit — análisis de redes de fibra y localización de cortes desde archivos PDF, KML y KMZ.">
+<!-- Favicon Estándar (Para pestañas de escritorio) -->
+<link rel="icon" type="image/svg+xml" href="./icon-trace-v6.svg">
+<link rel="alternate icon" type="image/png" href="./icon-192-v6.png"> <!-- Fallback para navegadores viejos -->
+<!-- Apple Touch Icon (Para iPhone/iPad) -->
+<link rel="apple-touch-icon" sizes="180x180" href="./icon-192-v6.png">
+<!-- Manifest JSON (CRUCIAL PARA ANDROID/MÓVILES) -->
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#020617">
+<title>Trace Circuit | Análisis de redes</title>
 <script>
 if("serviceWorker" in navigator){
   navigator.serviceWorker.register("./sw.js")
