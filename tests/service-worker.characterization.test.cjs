@@ -69,13 +69,13 @@ async function dispatchFetch(worker, req) {
   return event.response;
 }
 
-test("install precachea v6-release; activate actualiza su caché sin borrar main ni v4", async () => {
+test("install precachea icono SHIMADA; activate actualiza su caché sin borrar main ni v4", async () => {
   const worker = loadWorker();
   const install = { waitUntil(promise) { this.done = promise; } };
   worker.listeners.install(install);
   await install.done;
-  assert.deepEqual(worker.caches.opened, ["piloto-cto-v6-release"]);
-  assert.deepEqual(Array.from(worker.cache.precached), ["./", "./index.html", "./app-core.js", "./app-kml.js", "./app-pdf.js", "./app-processing.js", "./app-ui.js", "./app-share.js", "./manifest.webmanifest", "./share-target.html"]);
+  assert.deepEqual(worker.caches.opened, ["piloto-cto-v6-icono-shimada-v6-20261114"]);
+  assert.deepEqual(Array.from(worker.cache.precached), ["./", "./index.html", "./app-core.js", "./app-kml.js", "./app-pdf.js", "./app-processing.js", "./app-ui.js", "./app-share.js", "./manifest.webmanifest", "./share-target.html", "./icon-tc-shimada-v6.svg", "./icon-tc-shimada-v6-192.png", "./icon-tc-shimada-v6-512.png"]);
   assert.equal(worker.self.skipped, true);
 
   const activate = { waitUntil(promise) { this.done = promise; } };

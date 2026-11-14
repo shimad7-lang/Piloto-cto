@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "piloto-cto-v5-";
-const CACHE_NAME = "piloto-cto-v6-release";
+const CACHE_NAME = "piloto-cto-v6-icono-shimada-v6-20261114";
 
 const ARCHIVOS_APP = [
   "./",
@@ -11,7 +11,10 @@ const ARCHIVOS_APP = [
   "./app-ui.js",
   "./app-share.js",
   "./manifest.webmanifest",
-  "./share-target.html"
+  "./share-target.html",
+  "./icon-tc-shimada-v6.svg",
+  "./icon-tc-shimada-v6-192.png",
+  "./icon-tc-shimada-v6-512.png"
 ];
 
 self.addEventListener("install", event => {
@@ -51,7 +54,7 @@ self.addEventListener("activate", event => {
     caches.keys().then(keys =>
       Promise.all(
         keys
-          .filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+          .filter(key => (key.startsWith(CACHE_PREFIX) || key === "piloto-cto-v6-release" || key.startsWith("piloto-cto-v6-icono-shimada-")) && key !== CACHE_NAME)
           .map(key => caches.delete(key))
       )
     ).then(() => self.clients.claim())
